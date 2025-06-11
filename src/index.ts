@@ -12,6 +12,7 @@ import * as dotenv from 'dotenv';
 
 import { DeepCodeReasonerV2 } from './analyzers/DeepCodeReasonerV2.js';
 import type { ClaudeCodeContext, CodeScope } from './models/types.js';
+import { ErrorClassifier } from './utils/ErrorClassifier.js';
 
 // Load environment variables
 dotenv.config();
@@ -589,6 +590,39 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         `Invalid parameters: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`,
       );
     }
+    
+    // Use ErrorClassifier for consistent error handling
+    if (error instanceof Error) {
+      const classification = ErrorClassifier.classify(error);
+      
+      switch (classification.category) {
+        case 'session':
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            classification.description,
+          );
+          
+        case 'api':
+          throw new McpError(
+            ErrorCode.InternalError,
+            classification.description,
+          );
+          
+        case 'filesystem':
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            classification.description,
+          );
+          
+        default:
+          console.error('Unhandled error in request handler:', error);
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Internal error: ${error.message}. Check server logs for details.`,
+          );
+      }
+    }
+    
     throw error;
   }
 });

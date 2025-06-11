@@ -4,6 +4,7 @@ import type {
   DeepAnalysisResult,
   CodeLocation,
 } from '../models/types.js';
+import { SessionError, SessionNotFoundError } from '../errors/index.js';
 
 export interface ConversationContext {
   sessionId: string;
@@ -101,7 +102,7 @@ export class ConversationalGeminiService {
     const context = this.sessionContexts.get(sessionId);
     
     if (!chat || !context) {
-      throw new Error(`No active conversation found for session ${sessionId}`);
+      throw new SessionNotFoundError(sessionId);
     }
 
     // Process Claude's message
@@ -133,7 +134,7 @@ export class ConversationalGeminiService {
     const context = this.sessionContexts.get(sessionId);
     
     if (!chat || !context) {
-      throw new Error(`No active conversation found for session ${sessionId}`);
+      throw new SessionNotFoundError(sessionId);
     }
 
     // Request final synthesis
