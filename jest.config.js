@@ -2,7 +2,8 @@ export default {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  testMatch: ['**/__tests__/**/*.test.ts', '**/?(*.)+(spec|test).ts'],
+  testPathIgnorePatterns: ['/node_modules/', '/__tests__/mocks/'],
   transform: {
     '^.+\\.ts$': ['ts-jest', {
       useESM: true,
@@ -26,4 +27,7 @@ export default {
   transformIgnorePatterns: [
     'node_modules/(?!(@google/generative-ai)/)',
   ],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };
