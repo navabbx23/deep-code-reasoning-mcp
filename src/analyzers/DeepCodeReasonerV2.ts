@@ -7,6 +7,7 @@ import { GeminiService } from '../services/GeminiService.js';
 import { ConversationalGeminiService } from '../services/ConversationalGeminiService.js';
 import { ConversationManager } from '../services/ConversationManager.js';
 import { CodeReader } from '../utils/CodeReader.js';
+import { ErrorClassifier } from '../utils/ErrorClassifier.js';
 
 export class DeepCodeReasonerV2 {
   private geminiService: GeminiService;
@@ -265,116 +266,76 @@ export class DeepCodeReasonerV2 {
     code?: string;
     source: string;
   } {
-    // Check for specific error types
-    const errorStr = error.toString();
+    const classification = ErrorClassifier.classify(error);
+    const nextSteps = ErrorClassifier.getNextSteps(classification);
     const message = error.message;
     
-    // Google AI API errors
-    if (errorStr.includes('GoogleGenerativeAIError') || message.includes('API key')) {
-      return {
-        description: `Gemini API error: ${message}`,
-        rootCauses: [{
-          type: 'configuration',
-          description: 'Gemini API authentication or configuration issue',
-          location: { file: 'ConversationalGeminiService.ts', line: 0 },
-          evidence: [message]
-        }],
-        nextSteps: [
-          'Verify GEMINI_API_KEY environment variable is set correctly',
-          'Check API key permissions and quotas',
-          'Ensure API is enabled in Google Cloud Console'
-        ],
-        insight: 'The Gemini API service is not properly configured or authenticated',
-        code: 'GEMINI_AUTH_ERROR',
-        source: 'external_api'
-      };
+    // Map classification to detailed error structure
+    switch (classification.category) {
+      case 'api':
+        return {
+          description: classification.description,
+          rootCauses: [{
+            type: classification.code === 'RATE_LIMIT_ERROR' ? 'performance' : 'configuration',
+            description: classification.code === 'RATE_LIMIT_ERROR' 
+              ? 'API rate limit or quota exceeded'
+              : 'Gemini API authentication or configuration issue',
+            location: { file: 'ConversationalGeminiService.ts', line: 0 },
+            evidence: [message]
+          }],
+          nextSteps,
+          insight: classification.code === 'RATE_LIMIT_ERROR'
+            ? 'The system is making too many API requests in a short time period'
+            : 'The Gemini API service is not properly configured or authenticated',
+          code: classification.code,
+          source: 'external_api'
+        };
+        
+      case 'filesystem':
+        return {
+          description: classification.description,
+          rootCauses: [{
+            type: 'architecture',
+            description: 'File access or permission issue',
+            location: { file: 'CodeReader.ts', line: 0 },
+            evidence: [message]
+          }],
+          nextSteps,
+          insight: 'The code reader cannot access required files',
+          code: classification.code || 'FILE_ACCESS_ERROR',
+          source: 'filesystem'
+        };
+        
+      case 'session':
+        return {
+          description: classification.description,
+          rootCauses: [{
+            type: 'architecture',
+            description: 'Conversation session state issue',
+            location: { file: 'ConversationManager.ts', line: 0 },
+            evidence: [message]
+          }],
+          nextSteps,
+          insight: 'The conversation session is in an invalid state or does not exist',
+          code: classification.code || 'SESSION_ERROR',
+          source: 'internal'
+        };
+        
+      default:
+        return {
+          description: classification.description,
+          rootCauses: [{
+            type: 'unknown',
+            description: error.name || 'Unknown error',
+            location: { file: 'unknown', line: 0 },
+            evidence: [message, error.stack || '']
+          }],
+          nextSteps,
+          insight: 'An unexpected error occurred during deep code analysis',
+          code: 'UNKNOWN_ERROR',
+          source: 'unknown'
+        };
     }
-    
-    // Rate limit errors
-    if (message.includes('rate limit') || message.includes('quota')) {
-      return {
-        description: `API rate limit exceeded: ${message}`,
-        rootCauses: [{
-          type: 'performance',
-          description: 'API rate limit or quota exceeded',
-          location: { file: 'GeminiService.ts', line: 0 },
-          evidence: [message]
-        }],
-        nextSteps: [
-          'Implement exponential backoff retry logic',
-          'Add request queuing to manage rate limits',
-          'Consider upgrading API quota limits',
-          'Cache API responses to reduce redundant calls'
-        ],
-        insight: 'The system is making too many API requests in a short time period',
-        code: 'RATE_LIMIT_ERROR',
-        source: 'external_api'
-      };
-    }
-    
-    // File system errors
-    if (error.name === 'ENOENT' || message.includes('EACCES') || message.includes('no such file')) {
-      return {
-        description: `File system error: ${message}`,
-        rootCauses: [{
-          type: 'architecture',
-          description: 'File access or permission issue',
-          location: { file: 'CodeReader.ts', line: 0 },
-          evidence: [message]
-        }],
-        nextSteps: [
-          'Verify file paths are correct and files exist',
-          'Check file system permissions',
-          'Ensure working directory is set correctly',
-          'Review file path construction logic'
-        ],
-        insight: 'The system cannot access required source code files',
-        code: 'FILE_ACCESS_ERROR',
-        source: 'filesystem'
-      };
-    }
-    
-    // Session/conversation errors
-    if (message.includes('session') || message.includes('conversation')) {
-      return {
-        description: `Session management error: ${message}`,
-        rootCauses: [{
-          type: 'bug',
-          description: 'Conversation state management issue',
-          location: { file: 'ConversationManager.ts', line: 0 },
-          evidence: [message]
-        }],
-        nextSteps: [
-          'Check if session was properly initialized',
-          'Verify session hasn\'t expired or been cleaned up',
-          'Review session state transitions',
-          'Check for race conditions in session access'
-        ],
-        insight: 'The conversation session state is invalid or corrupted',
-        code: 'SESSION_ERROR',
-        source: 'internal'
-      };
-    }
-    
-    // Generic/unknown errors
-    return {
-      description: `Unexpected error: ${message}`,
-      rootCauses: [{
-        type: 'bug',
-        description: 'Unhandled error condition',
-        location: { file: 'unknown', line: 0 },
-        evidence: [error.stack || message]
-      }],
-      nextSteps: [
-        'Review full error stack trace',
-        'Check application logs for context',
-        'Add more specific error handling',
-        'Report issue if persistent'
-      ],
-      insight: 'An unexpected error occurred that should be investigated',
-      code: 'UNKNOWN_ERROR',
-      source: 'unknown'
-    };
   }
 
   // Conversational methods

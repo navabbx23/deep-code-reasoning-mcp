@@ -12,6 +12,7 @@ import * as dotenv from 'dotenv';
 
 import { DeepCodeReasonerV2 } from './analyzers/DeepCodeReasonerV2.js';
 import type { ClaudeCodeContext, CodeScope } from './models/types.js';
+import { ErrorClassifier } from './utils/ErrorClassifier.js';
 
 // Load environment variables
 dotenv.config();
@@ -590,45 +591,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       );
     }
     
-    // Handle session-related errors
-    if (error instanceof Error && error.message.includes('session')) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
-        `Session error: ${error.message}`,
-      );
-    }
-    
-    // Handle API errors
-    if (error instanceof Error && (
-      error.message.includes('API key') || 
-      error.message.includes('rate limit') ||
-      error.message.includes('quota')
-    )) {
-      throw new McpError(
-        ErrorCode.InternalError,
-        `External API error: ${error.message}`,
-      );
-    }
-    
-    // Handle file system errors
-    if (error instanceof Error && (
-      error.message.includes('ENOENT') ||
-      error.message.includes('EACCES') ||
-      error.message.includes('no such file')
-    )) {
-      throw new McpError(
-        ErrorCode.InvalidRequest,
-        `File access error: ${error.message}`,
-      );
-    }
-    
-    // For any other errors, provide more context
+    // Use ErrorClassifier for consistent error handling
     if (error instanceof Error) {
-      console.error('Unhandled error in request handler:', error);
-      throw new McpError(
-        ErrorCode.InternalError,
-        `Internal error: ${error.message}. Check server logs for details.`,
-      );
+      const classification = ErrorClassifier.classify(error);
+      
+      switch (classification.category) {
+        case 'session':
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            classification.description,
+          );
+          
+        case 'api':
+          throw new McpError(
+            ErrorCode.InternalError,
+            classification.description,
+          );
+          
+        case 'filesystem':
+          throw new McpError(
+            ErrorCode.InvalidRequest,
+            classification.description,
+          );
+          
+        default:
+          console.error('Unhandled error in request handler:', error);
+          throw new McpError(
+            ErrorCode.InternalError,
+            `Internal error: ${error.message}. Check server logs for details.`,
+          );
+      }
     }
     
     throw error;
