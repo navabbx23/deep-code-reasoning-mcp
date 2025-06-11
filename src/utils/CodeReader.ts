@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { CodeScope, CodeLocation } from '../models/types.js';
+import { FileSystemError } from '../errors/index.js';
 
 export class CodeReader {
   private cache: Map<string, string> = new Map();
@@ -46,7 +47,16 @@ export class CodeReader {
       this.cache.set(filePath, content);
       return content;
     } catch (error) {
-      throw new Error(`Cannot read file ${filePath}: ${error}`);
+      if (error instanceof Error) {
+        const code = (error as any).code || 'FS_ERROR';
+        throw new FileSystemError(
+          `Cannot read file ${filePath}: ${error.message}`,
+          code,
+          filePath,
+          'read'
+        );
+      }
+      throw error;
     }
   }
 

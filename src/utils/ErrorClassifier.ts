@@ -2,6 +2,8 @@
  * Shared utility for classifying and categorizing errors
  */
 
+import { SessionError, ApiError, FileSystemError, RateLimitError } from '../errors/index.js';
+
 export interface ClassifiedError {
   category: 'session' | 'api' | 'filesystem' | 'unknown';
   code?: string;
@@ -14,37 +16,48 @@ export class ErrorClassifier {
    * Classify an error into categories for proper handling
    */
   static classify(error: Error): ClassifiedError {
+    // Check for custom error types first
+    if (error instanceof SessionError) {
+      return {
+        category: 'session',
+        code: error.code,
+        description: `Session management error: ${error.message}`,
+        isRetryable: error.code === 'SESSION_LOCKED'
+      };
+    }
+    
+    if (error instanceof RateLimitError) {
+      return {
+        category: 'api',
+        code: 'RATE_LIMIT_ERROR',
+        description: `External API error: ${error.message}`,
+        isRetryable: true
+      };
+    }
+    
+    if (error instanceof ApiError) {
+      return {
+        category: 'api',
+        code: error.code,
+        description: `External API error: ${error.message}`,
+        isRetryable: false
+      };
+    }
+    
+    if (error instanceof FileSystemError) {
+      return {
+        category: 'filesystem',
+        code: error.code,
+        description: `File system error: ${error.message}`,
+        isRetryable: false
+      };
+    }
+    
+    // Fallback to checking error properties for non-custom errors
     const message = error.message;
     const errorStr = error.toString();
     
-    // Session-related errors
-    if (message.includes('session') || 
-        message.includes('Session') ||
-        message.includes('conversation') ||
-        message.includes('lock')) {
-      return {
-        category: 'session',
-        code: 'SESSION_ERROR',
-        description: `Session management error: ${message}`,
-        isRetryable: message.includes('currently processing')
-      };
-    }
-    
-    // API errors (Gemini)
-    if (errorStr.includes('GoogleGenerativeAIError') || 
-        message.includes('API key') ||
-        message.includes('rate limit') ||
-        message.includes('quota')) {
-      const isRateLimit = message.includes('rate limit') || message.includes('quota');
-      return {
-        category: 'api',
-        code: isRateLimit ? 'RATE_LIMIT_ERROR' : 'API_AUTH_ERROR',
-        description: `External API error: ${message}`,
-        isRetryable: isRateLimit
-      };
-    }
-    
-    // File system errors
+    // Native file system errors
     if ((error as any).code === 'ENOENT' || 
         (error as any).code === 'EACCES' ||
         message.includes('no such file') ||
@@ -53,6 +66,17 @@ export class ErrorClassifier {
         category: 'filesystem',
         code: (error as any).code || 'FS_ERROR',
         description: `File system error: ${message}`,
+        isRetryable: false
+      };
+    }
+    
+    // Gemini API errors (for backwards compatibility)
+    if (errorStr.includes('GoogleGenerativeAIError') || 
+        message.includes('API key')) {
+      return {
+        category: 'api',
+        code: 'API_AUTH_ERROR',
+        description: `External API error: ${message}`,
         isRetryable: false
       };
     }

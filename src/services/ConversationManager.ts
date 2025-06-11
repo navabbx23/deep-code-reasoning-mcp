@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ChatSession } from '@google/generative-ai';
 import { ClaudeCodeContext, DeepAnalysisResult } from '../models/types.js';
+import { SessionError, SessionNotFoundError } from '../errors/index.js';
 
 export interface ConversationTurn {
   id: string;
@@ -121,8 +122,11 @@ export class ConversationManager {
 
   addTurn(sessionId: string, role: ConversationTurn['role'], content: string, metadata?: ConversationTurn['metadata']): void {
     const session = this.getSession(sessionId);
-    if (!session || (session.status !== 'active' && session.status !== 'processing')) {
-      throw new Error(`Session ${sessionId} is not active or processing`);
+    if (!session) {
+      throw new SessionNotFoundError(sessionId);
+    }
+    if (session.status !== 'active' && session.status !== 'processing') {
+      throw new SessionError(`Session ${sessionId} is not active or processing`, 'SESSION_INVALID_STATE', sessionId);
     }
     
     const turn: ConversationTurn = {
@@ -172,7 +176,7 @@ export class ConversationManager {
   extractResults(sessionId: string): DeepAnalysisResult {
     const session = this.getSession(sessionId);
     if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
+      throw new SessionNotFoundError(sessionId);
     }
     
     // Synthesize all findings from the conversation

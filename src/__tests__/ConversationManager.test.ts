@@ -108,7 +108,7 @@ describe('ConversationManager', () => {
     it('should throw error when adding turn to non-existent session', () => {
       expect(() => {
         manager.addTurn('non-existent', 'claude', 'Test');
-      }).toThrow('Session non-existent is not active');
+      }).toThrow('Session non-existent not found or expired');
     });
   });
 

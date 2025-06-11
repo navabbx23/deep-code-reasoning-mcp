@@ -8,6 +8,7 @@ import { ConversationalGeminiService } from '../services/ConversationalGeminiSer
 import { ConversationManager } from '../services/ConversationManager.js';
 import { CodeReader } from '../utils/CodeReader.js';
 import { ErrorClassifier } from '../utils/ErrorClassifier.js';
+import { ConversationLockedError, SessionNotFoundError } from '../errors/index.js';
 
 export class DeepCodeReasonerV2 {
   private geminiService: GeminiService;
@@ -396,14 +397,14 @@ export class DeepCodeReasonerV2 {
     // Acquire lock before processing
     const lockAcquired = this.conversationManager.acquireLock(sessionId);
     if (!lockAcquired) {
-      throw new Error(`Session ${sessionId} is currently processing another request or not available`);
+      throw new ConversationLockedError(sessionId);
     }
 
     try {
       // Validate session
       const session = this.conversationManager.getSession(sessionId);
       if (!session) {
-        throw new Error(`Session ${sessionId} not found or expired`);
+        throw new SessionNotFoundError(sessionId);
       }
       
       // Add Claude's message to conversation history
@@ -446,14 +447,14 @@ export class DeepCodeReasonerV2 {
     // Acquire lock before processing
     const lockAcquired = this.conversationManager.acquireLock(sessionId);
     if (!lockAcquired) {
-      throw new Error(`Session ${sessionId} is currently processing another request or not available`);
+      throw new ConversationLockedError(sessionId);
     }
 
     try {
       // Validate session
       const session = this.conversationManager.getSession(sessionId);
       if (!session) {
-        throw new Error(`Session ${sessionId} not found or expired`);
+        throw new SessionNotFoundError(sessionId);
       }
       
       // Get final analysis from Gemini

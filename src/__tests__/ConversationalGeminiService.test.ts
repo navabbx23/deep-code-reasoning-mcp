@@ -149,7 +149,7 @@ describe('ConversationalGeminiService', () => {
       
       await expect(
         service.continueConversation('non-existent', 'test message')
-      ).rejects.toThrow('No active conversation found');
+      ).rejects.toThrow('Session non-existent not found or expired');
     });
 
     it('should throw error for non-existent session in finalizeConversation', async () => {
@@ -157,7 +157,7 @@ describe('ConversationalGeminiService', () => {
       
       await expect(
         service.finalizeConversation('non-existent')
-      ).rejects.toThrow('No active conversation found');
+      ).rejects.toThrow('Session non-existent not found or expired');
     });
   });
 });

@@ -8,6 +8,7 @@ import type {
   SystemImpact,
   RootCause,
 } from '../models/types.js';
+import { ApiError, RateLimitError } from '../errors/index.js';
 
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
@@ -43,7 +44,12 @@ export class GeminiService {
       return this.parseGeminiResponse(text, context);
     } catch (error) {
       console.error('Gemini API error:', error);
-      throw new Error(`Gemini analysis failed: ${error}`);
+      // Check for rate limit errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+        throw new RateLimitError(`Gemini API rate limit exceeded: ${errorMessage}`, 'gemini');
+      }
+      throw new ApiError(`Gemini analysis failed: ${errorMessage}`, 'GEMINI_API_ERROR', 'gemini');
     }
   }
 
