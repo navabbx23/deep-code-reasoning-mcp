@@ -589,6 +589,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         `Invalid parameters: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`,
       );
     }
+    
+    // Handle session-related errors
+    if (error instanceof Error && error.message.includes('session')) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Session error: ${error.message}`,
+      );
+    }
+    
+    // Handle API errors
+    if (error instanceof Error && (
+      error.message.includes('API key') || 
+      error.message.includes('rate limit') ||
+      error.message.includes('quota')
+    )) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `External API error: ${error.message}`,
+      );
+    }
+    
+    // Handle file system errors
+    if (error instanceof Error && (
+      error.message.includes('ENOENT') ||
+      error.message.includes('EACCES') ||
+      error.message.includes('no such file')
+    )) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `File access error: ${error.message}`,
+      );
+    }
+    
+    // For any other errors, provide more context
+    if (error instanceof Error) {
+      console.error('Unhandled error in request handler:', error);
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Internal error: ${error.message}. Check server logs for details.`,
+      );
+    }
+    
     throw error;
   }
 });

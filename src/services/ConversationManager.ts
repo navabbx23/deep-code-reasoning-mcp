@@ -18,7 +18,7 @@ export interface ConversationState {
   sessionId: string;
   startTime: number;
   lastActivity: number;
-  status: 'active' | 'completing' | 'completed' | 'abandoned';
+  status: 'active' | 'processing' | 'completing' | 'completed' | 'abandoned';
   context: ClaudeCodeContext;
   turns: ConversationTurn[];
   analysisProgress: {
@@ -34,10 +34,18 @@ export class ConversationManager {
   private sessions: Map<string, ConversationState> = new Map();
   private readonly SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   private readonly MAX_TURNS = 50;
+  private cleanupInterval?: NodeJS.Timeout;
 
   constructor() {
     // Clean up abandoned sessions periodically
-    setInterval(() => this.cleanupAbandonedSessions(), 5 * 60 * 1000);
+    this.cleanupInterval = setInterval(() => this.cleanupAbandonedSessions(), 5 * 60 * 1000);
+  }
+
+  destroy(): void {
+    // Clean up the interval when destroying the manager
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
   }
 
   createSession(context: ClaudeCodeContext): string {
@@ -76,10 +84,45 @@ export class ConversationManager {
     return session;
   }
 
+  /**
+   * Acquire an exclusive lock on a session for processing.
+   * Returns true if lock was acquired, false otherwise.
+   */
+  acquireLock(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+    
+    // Check if session has timed out
+    if (Date.now() - session.lastActivity > this.SESSION_TIMEOUT_MS) {
+      session.status = 'abandoned';
+      return false;
+    }
+    
+    // Only acquire lock if session is active
+    if (session.status === 'active') {
+      session.status = 'processing';
+      session.lastActivity = Date.now();
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Release the processing lock on a session.
+   */
+  releaseLock(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session && session.status === 'processing') {
+      session.status = 'active';
+      session.lastActivity = Date.now();
+    }
+  }
+
   addTurn(sessionId: string, role: ConversationTurn['role'], content: string, metadata?: ConversationTurn['metadata']): void {
     const session = this.getSession(sessionId);
-    if (!session || session.status !== 'active') {
-      throw new Error(`Session ${sessionId} is not active`);
+    if (!session || (session.status !== 'active' && session.status !== 'processing')) {
+      throw new Error(`Session ${sessionId} is not active or processing`);
     }
     
     const turn: ConversationTurn = {

@@ -217,10 +217,13 @@ export class DeepCodeReasonerV2 {
   }
 
   private createErrorResult(error: Error, context: ClaudeCodeContext): DeepAnalysisResult {
+    // Extract structured error information
+    const errorDetails = this.extractErrorDetails(error);
+    
     return {
       status: 'partial',
       findings: {
-        rootCauses: [],
+        rootCauses: errorDetails.rootCauses,
         executionPaths: [],
         performanceBottlenecks: [],
         crossSystemImpacts: [],
@@ -229,23 +232,148 @@ export class DeepCodeReasonerV2 {
         immediateActions: [
           {
             type: 'investigate',
-            description: `Deep reasoning error: ${error.message}`,
+            description: errorDetails.description,
             priority: 'high',
             estimatedEffort: '1 hour',
           },
         ],
-        investigationNextSteps: [
-          'Check Gemini API configuration',
-          'Verify file access permissions',
-          'Review error logs for details',
-        ],
+        investigationNextSteps: errorDetails.nextSteps,
         codeChangesNeeded: [],
       },
       enrichedContext: {
-        newInsights: [],
+        newInsights: [{
+          type: 'error',
+          description: errorDetails.insight,
+          supporting_evidence: [error.stack || error.message]
+        }],
         validatedHypotheses: [],
         ruledOutApproaches: context.attemptedApproaches,
       },
+      metadata: {
+        errorType: error.name,
+        errorCode: errorDetails.code,
+        errorSource: errorDetails.source,
+      }
+    };
+  }
+
+  private extractErrorDetails(error: Error): {
+    description: string;
+    rootCauses: any[];
+    nextSteps: string[];
+    insight: string;
+    code?: string;
+    source: string;
+  } {
+    // Check for specific error types
+    const errorStr = error.toString();
+    const message = error.message;
+    
+    // Google AI API errors
+    if (errorStr.includes('GoogleGenerativeAIError') || message.includes('API key')) {
+      return {
+        description: `Gemini API error: ${message}`,
+        rootCauses: [{
+          type: 'configuration',
+          description: 'Gemini API authentication or configuration issue',
+          location: { file: 'ConversationalGeminiService.ts', line: 0 },
+          evidence: [message]
+        }],
+        nextSteps: [
+          'Verify GEMINI_API_KEY environment variable is set correctly',
+          'Check API key permissions and quotas',
+          'Ensure API is enabled in Google Cloud Console'
+        ],
+        insight: 'The Gemini API service is not properly configured or authenticated',
+        code: 'GEMINI_AUTH_ERROR',
+        source: 'external_api'
+      };
+    }
+    
+    // Rate limit errors
+    if (message.includes('rate limit') || message.includes('quota')) {
+      return {
+        description: `API rate limit exceeded: ${message}`,
+        rootCauses: [{
+          type: 'performance',
+          description: 'API rate limit or quota exceeded',
+          location: { file: 'GeminiService.ts', line: 0 },
+          evidence: [message]
+        }],
+        nextSteps: [
+          'Implement exponential backoff retry logic',
+          'Add request queuing to manage rate limits',
+          'Consider upgrading API quota limits',
+          'Cache API responses to reduce redundant calls'
+        ],
+        insight: 'The system is making too many API requests in a short time period',
+        code: 'RATE_LIMIT_ERROR',
+        source: 'external_api'
+      };
+    }
+    
+    // File system errors
+    if (error.name === 'ENOENT' || message.includes('EACCES') || message.includes('no such file')) {
+      return {
+        description: `File system error: ${message}`,
+        rootCauses: [{
+          type: 'architecture',
+          description: 'File access or permission issue',
+          location: { file: 'CodeReader.ts', line: 0 },
+          evidence: [message]
+        }],
+        nextSteps: [
+          'Verify file paths are correct and files exist',
+          'Check file system permissions',
+          'Ensure working directory is set correctly',
+          'Review file path construction logic'
+        ],
+        insight: 'The system cannot access required source code files',
+        code: 'FILE_ACCESS_ERROR',
+        source: 'filesystem'
+      };
+    }
+    
+    // Session/conversation errors
+    if (message.includes('session') || message.includes('conversation')) {
+      return {
+        description: `Session management error: ${message}`,
+        rootCauses: [{
+          type: 'bug',
+          description: 'Conversation state management issue',
+          location: { file: 'ConversationManager.ts', line: 0 },
+          evidence: [message]
+        }],
+        nextSteps: [
+          'Check if session was properly initialized',
+          'Verify session hasn\'t expired or been cleaned up',
+          'Review session state transitions',
+          'Check for race conditions in session access'
+        ],
+        insight: 'The conversation session state is invalid or corrupted',
+        code: 'SESSION_ERROR',
+        source: 'internal'
+      };
+    }
+    
+    // Generic/unknown errors
+    return {
+      description: `Unexpected error: ${message}`,
+      rootCauses: [{
+        type: 'bug',
+        description: 'Unhandled error condition',
+        location: { file: 'unknown', line: 0 },
+        evidence: [error.stack || message]
+      }],
+      nextSteps: [
+        'Review full error stack trace',
+        'Check application logs for context',
+        'Add more specific error handling',
+        'Report issue if persistent'
+      ],
+      insight: 'An unexpected error occurred that should be investigated',
+      code: 'UNKNOWN_ERROR',
+      source: 'unknown'
     };
   }
 
@@ -304,6 +432,12 @@ export class DeepCodeReasonerV2 {
     canFinalize: boolean;
     status: string;
   }> {
+    // Acquire lock before processing
+    const lockAcquired = this.conversationManager.acquireLock(sessionId);
+    if (!lockAcquired) {
+      throw new Error(`Session ${sessionId} is currently processing another request or not available`);
+    }
+
     try {
       // Validate session
       const session = this.conversationManager.getSession(sessionId);
@@ -338,6 +472,9 @@ export class DeepCodeReasonerV2 {
     } catch (error) {
       console.error('Failed to continue conversation:', error);
       throw error;
+    } finally {
+      // Always release lock
+      this.conversationManager.releaseLock(sessionId);
     }
   }
 
@@ -345,6 +482,12 @@ export class DeepCodeReasonerV2 {
     sessionId: string,
     summaryFormat?: 'detailed' | 'concise' | 'actionable',
   ): Promise<DeepAnalysisResult> {
+    // Acquire lock before processing
+    const lockAcquired = this.conversationManager.acquireLock(sessionId);
+    if (!lockAcquired) {
+      throw new Error(`Session ${sessionId} is currently processing another request or not available`);
+    }
+
     try {
       // Validate session
       const session = this.conversationManager.getSession(sessionId);
@@ -372,6 +515,9 @@ export class DeepCodeReasonerV2 {
     } catch (error) {
       console.error('Failed to finalize conversation:', error);
       throw error;
+    } finally {
+      // Always release lock
+      this.conversationManager.releaseLock(sessionId);
     }
   }
 
