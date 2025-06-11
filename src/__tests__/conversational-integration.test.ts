@@ -29,7 +29,7 @@ describe('Conversational MCP Tools - Simple Integration', () => {
     });
 
     it('should create and manage sessions', () => {
-      const sessionId = conversationManager.createSession(testContext, 'performance');
+      const sessionId = conversationManager.createSession(testContext);
       
       expect(sessionId).toBeDefined();
       expect(typeof sessionId).toBe('string');
@@ -41,7 +41,7 @@ describe('Conversational MCP Tools - Simple Integration', () => {
     });
 
     it('should handle concurrent session locking', () => {
-      const sessionId = conversationManager.createSession(testContext, 'performance');
+      const sessionId = conversationManager.createSession(testContext);
       
       // First lock should succeed
       const lock1 = conversationManager.acquireLock(sessionId);
@@ -63,7 +63,7 @@ describe('Conversational MCP Tools - Simple Integration', () => {
     });
 
     it('should track session progress', () => {
-      const sessionId = conversationManager.createSession(testContext, 'performance');
+      const sessionId = conversationManager.createSession(testContext);
       
       // Add turns
       conversationManager.addTurn(sessionId, 'claude', 'First question');
@@ -83,7 +83,7 @@ describe('Conversational MCP Tools - Simple Integration', () => {
     });
 
     it('should determine when analysis should complete', () => {
-      const sessionId = conversationManager.createSession(testContext, 'performance');
+      const sessionId = conversationManager.createSession(testContext);
       
       // Initially may complete if no progress set
       const initialComplete = conversationManager.shouldComplete(sessionId);
@@ -108,7 +108,7 @@ describe('Conversational MCP Tools - Simple Integration', () => {
     });
 
     it('should extract results from session', () => {
-      const sessionId = conversationManager.createSession(testContext, 'performance');
+      const sessionId = conversationManager.createSession(testContext);
       
       conversationManager.updateProgress(sessionId, {
         confidenceLevel: 0.8,
