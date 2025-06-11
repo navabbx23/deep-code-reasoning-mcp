@@ -10,7 +10,7 @@ export interface ConversationTurn {
   timestamp: number;
   metadata?: {
     analysisType?: string;
-    newFindings?: any[];
+    newFindings?: unknown[];
     questions?: string[];
   };
 }
@@ -25,7 +25,7 @@ export interface ConversationState {
   analysisProgress: {
     completedSteps: string[];
     pendingQuestions: string[];
-    keyFindings: any[];
+    keyFindings: unknown[];
     confidenceLevel: number;
   };
   geminiSession?: ChatSession;
@@ -52,7 +52,7 @@ export class ConversationManager {
   createSession(context: ClaudeCodeContext): string {
     const sessionId = uuidv4();
     const now = Date.now();
-    
+
     const state: ConversationState = {
       sessionId,
       startTime: now,
@@ -64,10 +64,10 @@ export class ConversationManager {
         completedSteps: [],
         pendingQuestions: [],
         keyFindings: [],
-        confidenceLevel: 0
-      }
+        confidenceLevel: 0,
+      },
     };
-    
+
     this.sessions.set(sessionId, state);
     return sessionId;
   }
@@ -75,13 +75,13 @@ export class ConversationManager {
   getSession(sessionId: string): ConversationState | null {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
-    
+
     // Check if session has timed out
     if (Date.now() - session.lastActivity > this.SESSION_TIMEOUT_MS) {
       session.status = 'abandoned';
       return null;
     }
-    
+
     return session;
   }
 
@@ -128,18 +128,18 @@ export class ConversationManager {
     if (session.status !== 'active' && session.status !== 'processing') {
       throw new SessionError(`Session ${sessionId} is not active or processing`, 'SESSION_INVALID_STATE', sessionId);
     }
-    
+
     const turn: ConversationTurn = {
       id: uuidv4(),
       role,
       content,
       timestamp: Date.now(),
-      metadata
+      metadata,
     };
-    
+
     session.turns.push(turn);
     session.lastActivity = Date.now();
-    
+
     // Check turn limit
     if (session.turns.length >= this.MAX_TURNS) {
       session.status = 'completing';
@@ -149,12 +149,12 @@ export class ConversationManager {
   updateProgress(sessionId: string, updates: Partial<ConversationState['analysisProgress']>): void {
     const session = this.getSession(sessionId);
     if (!session) return;
-    
+
     session.analysisProgress = {
       ...session.analysisProgress,
-      ...updates
+      ...updates,
     };
-    
+
     // Auto-complete if confidence is high enough
     if (session.analysisProgress.confidenceLevel >= 0.9) {
       session.status = 'completing';
@@ -164,7 +164,7 @@ export class ConversationManager {
   shouldComplete(sessionId: string): boolean {
     const session = this.getSession(sessionId);
     if (!session) return true;
-    
+
     return (
       session.status === 'completing' ||
       session.analysisProgress.pendingQuestions.length === 0 ||
@@ -178,11 +178,11 @@ export class ConversationManager {
     if (!session) {
       throw new SessionNotFoundError(sessionId);
     }
-    
+
     // Synthesize all findings from the conversation
     const conversationInsights = this.extractInsightsFromTurns(session.turns);
     const recommendations = this.extractRecommendations(session);
-    
+
     return {
       status: 'success',
       findings: {
@@ -200,7 +200,7 @@ export class ConversationManager {
         newInsights: conversationInsights.map(insight => ({
           type: 'conversational',
           description: insight,
-          supporting_evidence: []
+          supporting_evidence: [],
         })),
         validatedHypotheses: [],
         ruledOutApproaches: session.context.attemptedApproaches,
@@ -209,23 +209,27 @@ export class ConversationManager {
         sessionId,
         totalTurns: session.turns.length,
         duration: Date.now() - session.startTime,
-        completedSteps: session.analysisProgress.completedSteps
-      }
+        completedSteps: session.analysisProgress.completedSteps,
+      },
     };
   }
 
   private extractInsightsFromTurns(turns: ConversationTurn[]): string[] {
     // Extract structured insights from conversation history
     const insights: string[] = [];
-    
+
     for (const turn of turns) {
       if (turn.metadata?.newFindings) {
-        insights.push(...turn.metadata.newFindings.map((f: any) => 
-          typeof f === 'string' ? f : f.description || JSON.stringify(f)
-        ));
+        insights.push(...turn.metadata.newFindings.map((f) => {
+          if (typeof f === 'string') {
+            return f;
+          }
+          const finding = f as Record<string, unknown>;
+          return (typeof finding.description === 'string' ? finding.description : null) || JSON.stringify(f);
+        }));
       }
     }
-    
+
     return insights;
   }
 
@@ -235,9 +239,9 @@ export class ConversationManager {
     const keyPoints = geminiTurns
       .map(t => this.extractKeyPoint(t.content))
       .filter(Boolean);
-    
+
     const analysisType = session.turns[0]?.metadata?.analysisType || 'code';
-    
+
     return `After ${session.turns.length} exchanges analyzing ${analysisType}, ` +
            `discovered: ${keyPoints.join('; ')}`;
   }
@@ -251,7 +255,7 @@ export class ConversationManager {
   private extractRecommendations(session: ConversationState): string[] {
     // Extract actionable recommendations from the conversation
     const recommendations: string[] = [];
-    
+
     for (const turn of session.turns) {
       if (turn.role === 'gemini' && turn.content.includes('recommend')) {
         // Parse recommendations from Gemini's responses
@@ -261,7 +265,7 @@ export class ConversationManager {
         }
       }
     }
-    
+
     return recommendations;
   }
 

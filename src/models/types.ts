@@ -41,16 +41,16 @@ export interface Finding {
 export interface ExecutionStep {
   location: CodeLocation;
   operation: string;
-  inputs: any[];
-  outputs: any[];
+  inputs: unknown[];
+  outputs: unknown[];
   stateChanges: StateChange[];
   duration?: number;
 }
 
 export interface StateChange {
   variable: string;
-  oldValue: any;
-  newValue: any;
+  oldValue: unknown;
+  newValue: unknown;
   scope: 'local' | 'global' | 'instance';
 }
 
@@ -125,7 +125,7 @@ export interface DeepAnalysisResult {
     totalTurns?: number;
     duration?: number;
     completedSteps?: string[];
-    [key: string]: any;
+    [key: string]: string | number | string[] | undefined;
   };
 }
 

@@ -61,8 +61,14 @@ interface MemoryLeak {
   severity: 'low' | 'medium' | 'high';
 }
 
+interface CachedAnalysis {
+  complexity?: ComplexityMetrics;
+  ioProfile?: IOProfile;
+  resourceModel?: ResourceModel;
+}
+
 export class PerformanceModeler {
-  private cache: Map<string, any>;
+  private cache: Map<string, CachedAnalysis>;
 
   constructor() {
     this.cache = new Map();
@@ -178,7 +184,7 @@ export class PerformanceModeler {
     for (const pattern of queryPatterns) {
       const matches = content.matchAll(pattern);
       for (const match of matches) {
-        const query = this.analyzeQuery(match, content);
+        const query = this.analyzeQuery(match, content, location);
         if (query) {
           databaseQueries.push(query);
         }
@@ -643,7 +649,7 @@ export class PerformanceModeler {
     return line.includes('{') && this.isComplexityIncreasing(line);
   }
 
-  private analyzeQuery(match: RegExpMatchArray, content: string): QueryPattern | null {
+  private analyzeQuery(match: RegExpMatchArray, content: string, _baseLocation: CodeLocation): QueryPattern | null {
     const lineNumber = this.getLineNumber(content, match.index || 0);
 
     // Determine query type

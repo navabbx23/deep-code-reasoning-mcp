@@ -459,7 +459,7 @@ export class SystemBoundaryAnalyzer {
       breakingChanges: types.includes('breaking') ? report.breakingChanges : [],
       performanceImplications: types.includes('performance') ? report.performanceImplications : [],
       systemImpacts: report.systemImpacts.filter(impact =>
-        types.includes(impact.impactType as any),
+        types.includes(impact.impactType as 'breaking' | 'performance' | 'behavioral'),
       ),
     };
 

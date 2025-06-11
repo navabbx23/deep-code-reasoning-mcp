@@ -12,7 +12,7 @@ import { ApiError, RateLimitError } from '../errors/index.js';
 
 export class GeminiService {
   private genAI: GoogleGenerativeAI;
-  private model: any;
+  private model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
 
   constructor(apiKey: string) {
     this.genAI = new GoogleGenerativeAI(apiKey);
@@ -191,7 +191,13 @@ Provide your analysis in the following JSON structure:
       const parsed = JSON.parse(jsonMatch[0]);
 
       // Convert to our DeepAnalysisResult format
-      const rootCauses: RootCause[] = (parsed.rootCauses || []).map((rc: any) => ({
+      const rootCauses: RootCause[] = (parsed.rootCauses || []).map((rc: {
+        type: string;
+        description: string;
+        evidence: string[];
+        confidence: number;
+        fixStrategy: string;
+      }) => ({
         type: rc.type,
         description: rc.description,
         evidence: rc.evidence.map((e: string) => this.parseLocationString(e)),
@@ -199,7 +205,12 @@ Provide your analysis in the following JSON structure:
         fixStrategy: rc.fixStrategy,
       }));
 
-      const executionPaths: ExecutionPath[] = (parsed.executionPaths || []).map((ep: any) => ({
+      const executionPaths: ExecutionPath[] = (parsed.executionPaths || []).map((ep: {
+        id: string;
+        description?: string;
+        criticalSteps: string[];
+        issues?: string[];
+      }) => ({
         id: ep.id,
         steps: ep.criticalSteps.map((step: string, index: number) => ({
           location: { file: 'analyzed', line: index },
@@ -216,7 +227,13 @@ Provide your analysis in the following JSON structure:
         },
       }));
 
-      const performanceBottlenecks: PerformanceIssue[] = (parsed.performanceBottlenecks || []).map((pb: any) => ({
+      const performanceBottlenecks: PerformanceIssue[] = (parsed.performanceBottlenecks || []).map((pb: {
+        type: 'n_plus_one' | 'inefficient_algorithm' | 'excessive_io' | 'memory_leak';
+        location: string;
+        estimatedLatency: number;
+        frequency: number;
+        suggestion: string;
+      }) => ({
         type: pb.type,
         location: this.parseLocationString(pb.location),
         impact: {
@@ -227,7 +244,11 @@ Provide your analysis in the following JSON structure:
         suggestion: pb.suggestion,
       }));
 
-      const crossSystemImpacts: SystemImpact[] = (parsed.crossSystemImpacts || []).map((impact: any) => ({
+      const crossSystemImpacts: SystemImpact[] = (parsed.crossSystemImpacts || []).map((impact: {
+        service: string;
+        impactType: 'breaking' | 'performance' | 'behavioral';
+        affectedEndpoints: string[];
+      }) => ({
         service: impact.service,
         impactType: impact.impactType,
         affectedEndpoints: impact.affectedEndpoints,
@@ -257,7 +278,11 @@ Provide your analysis in the following JSON structure:
           })),
         },
         enrichedContext: {
-          newInsights: (parsed.insights || []).map((insight: any) => ({
+          newInsights: (parsed.insights || []).map((insight: {
+        type: string;
+        description: string;
+        evidence: string[];
+      }) => ({
             type: insight.type,
             description: insight.description,
             supporting_evidence: insight.evidence,

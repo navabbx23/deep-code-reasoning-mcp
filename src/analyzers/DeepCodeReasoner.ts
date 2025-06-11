@@ -9,11 +9,42 @@ import type {
   CodeChange,
   Insight,
   CodeLocation,
+  SystemImpact,
 } from '../models/types.js';
 import { ExecutionTracer } from './ExecutionTracer.js';
 import { SystemBoundaryAnalyzer } from './SystemBoundaryAnalyzer.js';
 import { PerformanceModeler } from './PerformanceModeler.js';
 import { HypothesisTester } from './HypothesisTester.js';
+
+// Local type definitions
+interface ExecutionGraph {
+  nodes: Map<string, ExecutionNode>;
+  edges: Array<{ from: string; to: string; condition?: string }>;
+  entryPoint: string;
+}
+
+interface ExecutionNode {
+  id: string;
+  location: CodeLocation;
+  type: 'function' | 'method' | 'conditional' | 'loop' | 'assignment';
+  data: unknown;
+  children: ExecutionNode[];
+}
+
+interface ImpactReport {
+  breakingChanges: BreakingChange[];
+  performanceImplications: PerformanceIssue[];
+  systemImpacts: SystemImpact[];
+}
+
+interface BreakingChange {
+  service: string;
+  description: string;
+  affectedLocations: CodeLocation[];
+  confidence: number;
+  mitigation: string;
+  file?: string;
+}
 
 export class DeepCodeReasoner {
   private executionTracer: ExecutionTracer;
@@ -356,7 +387,7 @@ export class DeepCodeReasoner {
     }
   }
 
-  private analyzeExecutionPatterns(_graph: any): {
+  private analyzeExecutionPatterns(_graph: ExecutionGraph): {
     paths: ExecutionPath[];
     issues: Array<{
       description: string;
@@ -407,7 +438,7 @@ export class DeepCodeReasoner {
     ];
   }
 
-  private generateCrossSystemActions(impacts: any): Action[] {
+  private generateCrossSystemActions(impacts: ImpactReport): Action[] {
     const actions: Action[] = [];
 
     if (impacts.breakingChanges.length > 0) {
@@ -422,7 +453,7 @@ export class DeepCodeReasoner {
     return actions;
   }
 
-  private generateCrossSystemNextSteps(_impacts: any): string[] {
+  private generateCrossSystemNextSteps(_impacts: ImpactReport): string[] {
     return [
       'Update API documentation for changed endpoints',
       'Notify downstream service owners of changes',
@@ -430,20 +461,20 @@ export class DeepCodeReasoner {
     ];
   }
 
-  private generateCrossSystemCodeChanges(impacts: any): CodeChange[] {
-    return impacts.breakingChanges.map((change: any) => ({
-      file: change.file,
-      changeType: 'modify',
+  private generateCrossSystemCodeChanges(impacts: ImpactReport): CodeChange[] {
+    return impacts.breakingChanges.map((change) => ({
+      file: change.file || 'unknown',
+      changeType: 'modify' as const,
       description: change.mitigation,
     }));
   }
 
-  private extractCrossSystemInsights(impacts: any): Insight[] {
+  private extractCrossSystemInsights(impacts: ImpactReport): Insight[] {
     return [
       {
         type: 'system_dependencies',
         description: `Found ${impacts.systemImpacts.length} cross-system impacts`,
-        supporting_evidence: impacts.systemImpacts.map((i: any) => i.service),
+        supporting_evidence: impacts.systemImpacts.map((i) => i.service),
       },
     ];
   }

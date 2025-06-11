@@ -85,7 +85,10 @@ export class DeepCodeReasonerV2 {
     entryPoint: CodeLocation,
     maxDepth: number = 10,
     _includeDataFlow: boolean = true,
-  ): Promise<any> {
+  ): Promise<{
+    analysis: string;
+    filesAnalyzed: string[];
+  }> {
     // Get code context around entry point
     const _context = await this.codeReader.readCodeContext(entryPoint, 100);
 
@@ -117,7 +120,11 @@ export class DeepCodeReasonerV2 {
   async analyzeCrossSystemImpact(
     changeScope: string[],
     impactTypes?: string[],
-  ): Promise<any> {
+  ): Promise<{
+    analysis: string;
+    filesAnalyzed: string[];
+    impactTypes: string[];
+  }> {
     const codeFiles = new Map<string, string>();
 
     // Read all files in change scope
@@ -154,7 +161,10 @@ export class DeepCodeReasonerV2 {
     entryPoint: CodeLocation,
     profileDepth: number = 3,
     suspectedIssues?: string[],
-  ): Promise<any> {
+  ): Promise<{
+    analysis: string;
+    filesAnalyzed: string[];
+  }> {
     const codeFiles = new Map<string, string>();
 
     // Read entry point and related files
@@ -190,7 +200,12 @@ export class DeepCodeReasonerV2 {
     hypothesis: string,
     codeScope: string[],
     testApproach: string,
-  ): Promise<any> {
+  ): Promise<{
+    hypothesis: string;
+    testApproach: string;
+    analysis: string;
+    filesAnalyzed: string[];
+  }> {
     const codeFiles = new Map<string, string>();
 
     // Read all files in scope
@@ -353,25 +368,25 @@ export class DeepCodeReasonerV2 {
     try {
       // Create session
       const sessionId = this.conversationManager.createSession(context);
-      
+
       // Read relevant code files
       const codeFiles = await this.codeReader.readCodeFiles(context.focusArea);
-      
+
       // Start Gemini conversation
       const { response, suggestedFollowUps } = await this.conversationalGemini.startConversation(
         sessionId,
         context,
         analysisType,
         codeFiles,
-        initialQuestion
+        initialQuestion,
       );
-      
+
       // Track conversation turn
       this.conversationManager.addTurn(sessionId, 'gemini', response, {
         analysisType,
         questions: suggestedFollowUps,
       });
-      
+
       return {
         sessionId,
         initialResponse: response,
@@ -406,25 +421,25 @@ export class DeepCodeReasonerV2 {
       if (!session) {
         throw new SessionNotFoundError(sessionId);
       }
-      
+
       // Add Claude's message to conversation history
       this.conversationManager.addTurn(sessionId, 'claude', message);
-      
+
       // Continue with Gemini
       const { response, analysisProgress, canFinalize } = await this.conversationalGemini.continueConversation(
         sessionId,
         message,
-        includeCodeSnippets
+        includeCodeSnippets,
       );
-      
+
       // Track Gemini's response
       this.conversationManager.addTurn(sessionId, 'gemini', response);
-      
+
       // Update progress
       this.conversationManager.updateProgress(sessionId, {
         confidenceLevel: analysisProgress,
       });
-      
+
       return {
         response,
         analysisProgress,
@@ -456,16 +471,16 @@ export class DeepCodeReasonerV2 {
       if (!session) {
         throw new SessionNotFoundError(sessionId);
       }
-      
+
       // Get final analysis from Gemini
       const result = await this.conversationalGemini.finalizeConversation(
         sessionId,
-        summaryFormat || 'detailed'
+        summaryFormat || 'detailed',
       );
-      
+
       // Extract additional insights from conversation manager
       const conversationResults = this.conversationManager.extractResults(sessionId);
-      
+
       // Merge results
       return {
         ...result,
@@ -504,9 +519,9 @@ export class DeepCodeReasonerV2 {
         canFinalize: false,
       };
     }
-    
+
     const canFinalize = this.conversationManager.shouldComplete(sessionId);
-    
+
     return {
       sessionId,
       status: session.status,

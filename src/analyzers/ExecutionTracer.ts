@@ -11,8 +11,30 @@ interface ExecutionNode {
   id: string;
   location: CodeLocation;
   type: 'function' | 'method' | 'conditional' | 'loop' | 'assignment';
-  data: any;
+  data: ASTNode;
   children: ExecutionNode[];
+}
+
+interface ASTNode {
+  type: string;
+  name?: string;
+  location?: ASTLocation;
+  body?: ASTNode[];
+  declarations?: ASTNode[];
+  methods?: ASTNode[];
+  stateChanges?: StateChange[];
+  callee?: ASTNode;
+  property?: ASTNode;
+  left?: ASTNode;
+  right?: ASTNode;
+  id?: ASTNode;
+  init?: ASTNode;
+  object?: ASTNode;
+}
+
+interface ASTLocation {
+  start: { line: number; column?: number };
+  end: { line: number; column?: number };
 }
 
 interface ExecutionGraph {
@@ -21,8 +43,12 @@ interface ExecutionGraph {
   entryPoint: string;
 }
 
+interface ParsedAST {
+  functions: ASTNode[];
+}
+
 export class ExecutionTracer {
-  private cache: Map<string, any>;
+  private cache: Map<string, ParsedAST>;
 
   constructor() {
     this.cache = new Map();
@@ -117,10 +143,11 @@ export class ExecutionTracer {
     }
   }
 
-  private async parseFile(filePath: string, content: string): Promise<any> {
+  private async parseFile(filePath: string, content: string): Promise<ParsedAST> {
     const cacheKey = `${filePath}:${content.length}`;
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey);
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     // Simple AST representation for our purposes
@@ -129,10 +156,10 @@ export class ExecutionTracer {
     return parsed;
   }
 
-  private parseTypeScriptContent(content: string): any {
+  private parseTypeScriptContent(content: string): ParsedAST {
     // Simplified parsing - in production, use proper TypeScript compiler API
     const lines = content.split('\n');
-    const functions: any[] = [];
+    const functions: ASTNode[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -142,17 +169,17 @@ export class ExecutionTracer {
           name: functionMatch[1],
           location: { start: { line: i + 1 }, end: { line: i + 1 } },
           type: 'FunctionDeclaration',
-        });
+        } as ASTNode);
       }
     }
 
     return { functions };
   }
 
-  private findNodeAtLocation(ast: any, location: CodeLocation): any {
+  private findNodeAtLocation(ast: ParsedAST, location: CodeLocation): ASTNode | null {
     // Simplified AST traversal to find node at specific location
     // In a real implementation, this would use proper AST visitor pattern
-    return this.traverseAST(ast, (node: any) => {
+    return this.traverseAST(ast, (node: ASTNode) => {
       if (node.location &&
           node.location.start.line <= location.line &&
           node.location.end.line >= location.line) {
@@ -162,26 +189,37 @@ export class ExecutionTracer {
     });
   }
 
-  private traverseAST(node: any, visitor: (node: any) => any): any {
+  private traverseAST(node: ASTNode | ParsedAST, visitor: (node: ASTNode) => ASTNode | null): ASTNode | null {
+    // If it's a ParsedAST, traverse its functions
+    if ('functions' in node) {
+      for (const func of node.functions) {
+        const result = this.traverseAST(func, visitor);
+        if (result) return result;
+      }
+      return null;
+    }
+
     const result = visitor(node);
     if (result) return result;
 
-    if (node.declarations) {
-      for (const decl of node.declarations) {
+    const astNode = node as ASTNode;
+
+    if (astNode.declarations) {
+      for (const decl of astNode.declarations) {
         const result = this.traverseAST(decl, visitor);
         if (result) return result;
       }
     }
 
-    if (node.methods) {
-      for (const method of node.methods) {
+    if (astNode.methods) {
+      for (const method of astNode.methods) {
         const result = this.traverseAST(method, visitor);
         if (result) return result;
       }
     }
 
-    if (node.body && Array.isArray(node.body)) {
-      for (const child of node.body) {
+    if (astNode.body && Array.isArray(astNode.body)) {
+      for (const child of astNode.body) {
         const result = this.traverseAST(child, visitor);
         if (result) return result;
       }
@@ -190,7 +228,7 @@ export class ExecutionTracer {
     return null;
   }
 
-  private getNodeType(node: any): ExecutionNode['type'] {
+  private getNodeType(node: ASTNode): ExecutionNode['type'] {
     if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression') {
       return 'function';
     }
@@ -207,7 +245,7 @@ export class ExecutionTracer {
   }
 
   private async analyzeDataFlow(
-    node: any,
+    node: ASTNode,
     execNode: ExecutionNode,
     _graph: ExecutionGraph,
   ): Promise<void> {
@@ -227,10 +265,10 @@ export class ExecutionTracer {
     execNode.data.stateChanges = stateChanges;
   }
 
-  private findFunctionCalls(node: any): Array<{ name: string; condition?: string }> {
+  private findFunctionCalls(node: ASTNode): Array<{ name: string; condition?: string }> {
     const calls: Array<{ name: string; condition?: string }> = [];
 
-    this.traverseAST(node, (child: any) => {
+    this.traverseAST(node, (child: ASTNode) => {
       if (child.type === 'CallExpression') {
         calls.push({
           name: this.extractCallName(child),
@@ -243,17 +281,17 @@ export class ExecutionTracer {
     return calls;
   }
 
-  private extractCallName(callNode: any): string {
-    if (callNode.callee.type === 'Identifier') {
-      return callNode.callee.name;
+  private extractCallName(callNode: ASTNode): string {
+    if (callNode.callee?.type === 'Identifier') {
+      return callNode.callee.name || 'unknown';
     }
-    if (callNode.callee.type === 'MemberExpression') {
-      return `${this.extractCallName(callNode.callee.object)}.${callNode.callee.property.name}`;
+    if (callNode.callee?.type === 'MemberExpression') {
+      return `${this.extractCallName(callNode.callee.object || {} as ASTNode)}.${callNode.callee.property?.name || 'unknown'}`;
     }
     return 'unknown';
   }
 
-  private extractCondition(_node: any): string | undefined {
+  private extractCondition(_node: ASTNode): string | undefined {
     // Check if this call is within a conditional
     // Simplified implementation
     return undefined;
@@ -292,10 +330,10 @@ export class ExecutionTracer {
     return null;
   }
 
-  private findAssignments(node: any): Array<{ variable: string; value: any; location: any }> {
-    const assignments: Array<{ variable: string; value: any; location: any }> = [];
+  private findAssignments(node: ASTNode): Array<{ variable: string; value: ASTNode | undefined; location: ASTLocation | undefined }> {
+    const assignments: Array<{ variable: string; value: ASTNode | undefined; location: ASTLocation | undefined }> = [];
 
-    this.traverseAST(node, (child: any) => {
+    this.traverseAST(node, (child: ASTNode) => {
       if (child.type === 'AssignmentExpression' || child.type === 'VariableDeclarator') {
         assignments.push({
           variable: this.extractVariableName(child.left || child.id),
@@ -309,17 +347,18 @@ export class ExecutionTracer {
     return assignments;
   }
 
-  private extractVariableName(node: any): string {
+  private extractVariableName(node: ASTNode | undefined): string {
+    if (!node) return 'unknown';
     if (node.type === 'Identifier') {
-      return node.name;
+      return node.name || 'unknown';
     }
     if (node.type === 'MemberExpression') {
-      return `${this.extractVariableName(node.object)}.${node.property.name}`;
+      return `${this.extractVariableName(node.object)}.${node.property?.name || 'unknown'}`;
     }
     return 'unknown';
   }
 
-  private determineScope(assignment: any): 'local' | 'global' | 'instance' {
+  private determineScope(assignment: { variable: string; value: ASTNode | undefined; location: ASTLocation | undefined }): 'local' | 'global' | 'instance' {
     // Simplified scope determination
     if (assignment.variable.startsWith('this.')) {
       return 'instance';

@@ -1,8 +1,7 @@
-import { GoogleGenerativeAI, ChatSession, Content } from '@google/generative-ai';
+import { GoogleGenerativeAI, ChatSession } from '@google/generative-ai';
 import type {
   ClaudeCodeContext,
   DeepAnalysisResult,
-  CodeLocation,
 } from '../models/types.js';
 import { SessionError, SessionNotFoundError } from '../errors/index.js';
 
@@ -15,7 +14,7 @@ export interface ConversationContext {
 
 export class ConversationalGeminiService {
   private genAI: GoogleGenerativeAI;
-  private model: any;
+  private model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
   private activeSessions: Map<string, ChatSession> = new Map();
   private sessionContexts: Map<string, ConversationContext> = new Map();
 
@@ -39,11 +38,11 @@ export class ConversationalGeminiService {
     context: ClaudeCodeContext,
     analysisType: string,
     codeContent: Map<string, string>,
-    initialQuestion?: string
+    initialQuestion?: string,
   ): Promise<{ response: string; suggestedFollowUps: string[] }> {
     // Build initial system context
     const systemPrompt = this.buildSystemPrompt(context, analysisType);
-    
+
     // Initialize chat session
     const chat = this.model.startChat({
       history: [
@@ -78,7 +77,7 @@ export class ConversationalGeminiService {
       context,
       analysisType,
       codeContent,
-      initialQuestion
+      initialQuestion,
     );
 
     const result = await chat.sendMessage(initialPrompt);
@@ -96,11 +95,11 @@ export class ConversationalGeminiService {
   async continueConversation(
     sessionId: string,
     message: string,
-    includeCodeSnippets?: boolean
+    includeCodeSnippets?: boolean,
   ): Promise<{ response: string; analysisProgress: number; canFinalize: boolean }> {
     const chat = this.activeSessions.get(sessionId);
     const context = this.sessionContexts.get(sessionId);
-    
+
     if (!chat || !context) {
       throw new SessionNotFoundError(sessionId);
     }
@@ -128,11 +127,11 @@ export class ConversationalGeminiService {
 
   async finalizeConversation(
     sessionId: string,
-    summaryFormat: 'detailed' | 'concise' | 'actionable' = 'detailed'
+    summaryFormat: 'detailed' | 'concise' | 'actionable' = 'detailed',
   ): Promise<DeepAnalysisResult> {
     const chat = this.activeSessions.get(sessionId);
     const context = this.sessionContexts.get(sessionId);
-    
+
     if (!chat || !context) {
       throw new SessionNotFoundError(sessionId);
     }
@@ -145,7 +144,7 @@ export class ConversationalGeminiService {
     // Parse and structure the final results
     const structuredResult = this.parseConversationalAnalysis(
       finalAnalysis,
-      context.claudeContext
+      context.claudeContext,
     );
 
     // Clean up session
@@ -185,9 +184,9 @@ You should maintain a balance between:
     context: ClaudeCodeContext,
     analysisType: string,
     codeContent: Map<string, string>,
-    initialQuestion?: string
+    initialQuestion?: string,
   ): string {
-    let prompt = `Let's begin our analysis. Here's the code we're examining:\n\n`;
+    let prompt = 'Let\'s begin our analysis. Here\'s the code we\'re examining:\n\n';
 
     // Add code snippets
     for (const [file, content] of codeContent) {
@@ -197,16 +196,16 @@ You should maintain a balance between:
     // Add specific focus based on analysis type
     switch (analysisType) {
       case 'execution_trace':
-        prompt += `Please start by identifying the main execution flow and any non-obvious control paths. What questions do you have about the execution context?`;
+        prompt += 'Please start by identifying the main execution flow and any non-obvious control paths. What questions do you have about the execution context?';
         break;
       case 'cross_system':
-        prompt += `Please identify the service boundaries and communication patterns. What additional context about the services would help your analysis?`;
+        prompt += 'Please identify the service boundaries and communication patterns. What additional context about the services would help your analysis?';
         break;
       case 'performance':
-        prompt += `Please identify potential performance bottlenecks. What runtime characteristics would you need to know for a complete analysis?`;
+        prompt += 'Please identify potential performance bottlenecks. What runtime characteristics would you need to know for a complete analysis?';
         break;
       case 'hypothesis_test':
-        prompt += `Based on the stuck points, what initial hypotheses come to mind? What specific evidence would help validate or refute them?`;
+        prompt += 'Based on the stuck points, what initial hypotheses come to mind? What specific evidence would help validate or refute them?';
         break;
     }
 
@@ -256,7 +255,7 @@ Structure your response as JSON with the following format:
 
   private extractFollowUpQuestions(response: string, analysisType: string): string[] {
     const questions: string[] = [];
-    
+
     // Extract explicit questions from response
     const questionMatches = response.match(/\?[^.!?]*$/gm);
     if (questionMatches) {
@@ -287,9 +286,9 @@ Structure your response as JSON with the following format:
   private enrichMessageWithCode(message: string, codeFiles: Map<string, string>): string {
     // Find file references in the message
     const fileRefs = message.match(/(\w+\.\w+):?(\d+)?/g) || [];
-    
+
     let enriched = message + '\n\nReferenced code:\n';
-    
+
     for (const ref of fileRefs) {
       const [fileName, lineNum] = ref.split(':');
       for (const [file, content] of codeFiles) {
@@ -305,7 +304,7 @@ Structure your response as JSON with the following format:
         }
       }
     }
-    
+
     return enriched;
   }
 
@@ -313,26 +312,26 @@ Structure your response as JSON with the following format:
     // Simple progress calculation based on conversation context
     const sessionContext = this.sessionContexts.get(context.sessionId);
     if (!sessionContext) return 0;
-    
+
     // Estimate based on context analysis
     const hasMultipleFindings = context.claudeContext.partialFindings.length > 2;
     const hasComplexScope = context.codeFiles.size > 5;
     const baseProgress = hasMultipleFindings ? 0.4 : 0.2;
-    
+
     // Check if we've covered the main analysis areas
-    const hasRootCauseDiscussion = sessionContext.claudeContext.stuckPoints.some(p => 
-      p.toLowerCase().includes('cause') || p.toLowerCase().includes('issue')
+    const hasRootCauseDiscussion = sessionContext.claudeContext.stuckPoints.some(p =>
+      p.toLowerCase().includes('cause') || p.toLowerCase().includes('issue'),
     );
-    
+
     const progressBonus = hasRootCauseDiscussion ? 0.3 : 0;
     const complexityBonus = hasComplexScope ? 0.2 : 0.1;
-    
+
     return Math.min(baseProgress + progressBonus + complexityBonus, 0.95);
   }
 
   private parseConversationalAnalysis(
     finalAnalysis: string,
-    originalContext: ClaudeCodeContext
+    originalContext: ClaudeCodeContext,
   ): DeepAnalysisResult {
     try {
       const jsonMatch = finalAnalysis.match(/\{[\s\S]*\}/);
@@ -365,12 +364,12 @@ Structure your response as JSON with the following format:
           })),
         },
         enrichedContext: {
-          newInsights: (parsed.keyFindings || []).map((finding: any) => ({
+          newInsights: (parsed.keyFindings || []).map((finding: { finding: string; significance?: string; evidence?: string[] }) => ({
             type: 'conversational',
             description: finding.finding,
             supporting_evidence: finding.evidence || [],
           })),
-          validatedHypotheses: parsed.conversationInsights?.map((i: any) => i.insight) || [],
+          validatedHypotheses: parsed.conversationInsights?.map((i: { insight: string; turnReference?: string }) => i.insight) || [],
           ruledOutApproaches: originalContext.attemptedApproaches,
         },
       };
