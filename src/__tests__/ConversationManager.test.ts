@@ -8,11 +8,13 @@ describe('ConversationManager', () => {
 
   const testContext: ClaudeCodeContext = {
     attemptedApproaches: ['Approach 1'],
-    partialFindings: [{ type: 'test', data: 'finding' }],
+    partialFindings: [{ type: 'bug' as const, severity: 'low' as const, location: { file: 'test.ts', line: 1 }, description: 'Test finding', evidence: [] }],
     stuckPoints: ['Stuck point 1'],
-    codeScope: {
+    focusArea: {
       files: ['test.ts'],
+      entryPoints: [],
     },
+    analysisBudgetRemaining: 100,
   };
 
   beforeEach(() => {
@@ -35,19 +37,19 @@ describe('ConversationManager', () => {
       const session1 = manager.getSession(sessionId1);
       const session2 = manager.getSession(sessionId2);
 
-      expect(session1.sessionId).toBeTruthy();
-      expect(session2.sessionId).toBeTruthy();
-      expect(session1.sessionId).not.toBe(session2.sessionId);
+      expect(session1!.sessionId).toBeTruthy();
+      expect(session2!.sessionId).toBeTruthy();
+      expect(session1!.sessionId).not.toBe(session2!.sessionId);
     });
 
     it('should initialize session with correct properties', () => {
       const sessionId = manager.createSession(testContext);
       const session = manager.getSession(sessionId);
 
-      expect(session.status).toBe('active');
-      expect(session.context).toEqual(testContext);
-      expect(session.turns).toEqual([]);
-      expect(session.analysisProgress).toEqual({
+      expect(session!.status).toBe('active');
+      expect(session!.context).toEqual(testContext);
+      expect(session!.turns).toEqual([]);
+      expect(session!.analysisProgress).toEqual({
         completedSteps: [],
         pendingQuestions: [],
         keyFindings: [],
@@ -62,7 +64,7 @@ describe('ConversationManager', () => {
       const created = manager.getSession(sessionId);
       const retrieved = manager.getSession(sessionId);
 
-      expect(retrieved.sessionId).toEqual(sessionId);
+      expect(retrieved!.sessionId).toEqual(sessionId);
     });
 
     it('should return null for non-existent session', () => {
@@ -75,7 +77,7 @@ describe('ConversationManager', () => {
     it('should add turn to session and update activity', () => {
       const sessionId = manager.createSession(testContext);
       const session = manager.getSession(sessionId);
-      const initialActivity = session.lastActivity;
+      const initialActivity = session!.lastActivity;
 
       // Wait a bit to ensure timestamp difference
       jest.advanceTimersByTime(100);
@@ -189,7 +191,7 @@ describe('ConversationManager', () => {
       const results = manager.extractResults(sessionId);
 
       expect(results.status).toBe('success');
-      expect(results.metadata.sessionId).toBe(sessionId);
+      expect(results.metadata!.sessionId).toBe(sessionId);
     });
   });
 

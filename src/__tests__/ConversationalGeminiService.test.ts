@@ -5,7 +5,7 @@ import type { ClaudeCodeContext } from '../models/types.js';
 describe('ConversationalGeminiService', () => {
   const testContext: ClaudeCodeContext = {
     attemptedApproaches: ['Test approach 1', 'Test approach 2'],
-    partialFindings: [{ type: 'test', description: 'Test finding' }],
+    partialFindings: [{ type: 'bug' as const, severity: 'low' as const, location: { file: 'test.ts', line: 1 }, description: 'Test finding', evidence: [] }],
     stuckPoints: ['Stuck on test issue'],
     focusArea: {
       files: ['test.ts'],
@@ -40,7 +40,7 @@ describe('ConversationalGeminiService', () => {
       
       // The method extracts questions ending with ?
       expect(questions.length).toBeGreaterThan(0);
-      expect(questions.some(q => q.includes('?'))).toBe(true);
+      expect(questions.some((q: string) => q.includes('?'))).toBe(true);
     });
 
     it('should handle responses without questions', () => {

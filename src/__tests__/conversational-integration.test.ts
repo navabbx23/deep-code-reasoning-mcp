@@ -6,7 +6,7 @@ import type { ClaudeCodeContext } from '../models/types.js';
 describe('Conversational MCP Tools - Simple Integration', () => {
   const testContext: ClaudeCodeContext = {
     attemptedApproaches: ['Initial analysis'],
-    partialFindings: [{ type: 'performance', severity: 'medium', location: { file: 'src/service.ts', line: 100 }, description: 'Slow queries', evidence: [] }],
+    partialFindings: [{ type: 'performance' as const, severity: 'medium' as const, location: { file: 'src/service.ts', line: 100 }, description: 'Slow queries', evidence: [] }],
     stuckPoints: ['Cannot determine root cause'],
     focusArea: {
       files: ['src/service.ts'],
@@ -75,8 +75,8 @@ describe('Conversational MCP Tools - Simple Integration', () => {
       // Update progress
       conversationManager.updateProgress(sessionId, {
         confidenceLevel: 0.7,
-        keyInsights: ['Found potential issue'],
-        remainingQuestions: ['Need to check database']
+        keyFindings: ['Found potential issue'],
+        pendingQuestions: ['Need to check database']
       });
       
       expect(session?.analysisProgress?.confidenceLevel).toBe(0.7);
@@ -99,8 +99,8 @@ describe('Conversational MCP Tools - Simple Integration', () => {
       // Update with high confidence
       conversationManager.updateProgress(sessionId, {
         confidenceLevel: 0.95,
-        keyInsights: ['Root cause identified'],
-        remainingQuestions: []
+        keyFindings: ['Root cause identified'],
+        pendingQuestions: []
       });
       
       // Now should complete
@@ -112,8 +112,8 @@ describe('Conversational MCP Tools - Simple Integration', () => {
       
       conversationManager.updateProgress(sessionId, {
         confidenceLevel: 0.8,
-        keyInsights: ['Database index missing', 'N+1 queries'],
-        remainingQuestions: []
+        keyFindings: ['Database index missing', 'N+1 queries'],
+        pendingQuestions: []
       });
       
       const results = conversationManager.extractResults(sessionId);
@@ -121,8 +121,8 @@ describe('Conversational MCP Tools - Simple Integration', () => {
       expect(results).toBeDefined();
       // Check if results contain the progress data
       const session = conversationManager.getSession(sessionId);
-      expect(session?.analysisProgress?.keyInsights).toContain('Database index missing');
-      expect(session?.analysisProgress?.keyInsights).toContain('N+1 queries');
+      expect(session?.analysisProgress?.keyFindings).toContain('Database index missing');
+      expect(session?.analysisProgress?.keyFindings).toContain('N+1 queries');
       expect(session?.analysisProgress?.confidenceLevel).toBe(0.8);
     });
   });
