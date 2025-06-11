@@ -4,14 +4,20 @@ import type {
   CodeLocation,
 } from '../models/types.js';
 import { GeminiService } from '../services/GeminiService.js';
+import { ConversationalGeminiService } from '../services/ConversationalGeminiService.js';
+import { ConversationManager } from '../services/ConversationManager.js';
 import { CodeReader } from '../utils/CodeReader.js';
 
 export class DeepCodeReasonerV2 {
   private geminiService: GeminiService;
+  private conversationalGemini: ConversationalGeminiService;
+  private conversationManager: ConversationManager;
   private codeReader: CodeReader;
 
   constructor(geminiApiKey: string) {
     this.geminiService = new GeminiService(geminiApiKey);
+    this.conversationalGemini = new ConversationalGeminiService(geminiApiKey);
+    this.conversationManager = new ConversationManager();
     this.codeReader = new CodeReader();
   }
 
@@ -240,6 +246,166 @@ export class DeepCodeReasonerV2 {
         validatedHypotheses: [],
         ruledOutApproaches: context.attemptedApproaches,
       },
+    };
+  }
+
+  // Conversational methods
+  async startConversation(
+    context: ClaudeCodeContext,
+    analysisType: string,
+    initialQuestion?: string,
+  ): Promise<{
+    sessionId: string;
+    initialResponse: string;
+    suggestedFollowUps: string[];
+    status: 'active';
+  }> {
+    try {
+      // Create session
+      const sessionId = this.conversationManager.createSession(context);
+      
+      // Read relevant code files
+      const codeFiles = await this.codeReader.readCodeFiles(context.focusArea);
+      
+      // Start Gemini conversation
+      const { response, suggestedFollowUps } = await this.conversationalGemini.startConversation(
+        sessionId,
+        context,
+        analysisType,
+        codeFiles,
+        initialQuestion
+      );
+      
+      // Track conversation turn
+      this.conversationManager.addTurn(sessionId, 'gemini', response, {
+        analysisType,
+        questions: suggestedFollowUps,
+      });
+      
+      return {
+        sessionId,
+        initialResponse: response,
+        suggestedFollowUps,
+        status: 'active',
+      };
+    } catch (error) {
+      console.error('Failed to start conversation:', error);
+      throw error;
+    }
+  }
+
+  async continueConversation(
+    sessionId: string,
+    message: string,
+    includeCodeSnippets?: boolean,
+  ): Promise<{
+    response: string;
+    analysisProgress: number;
+    canFinalize: boolean;
+    status: string;
+  }> {
+    try {
+      // Validate session
+      const session = this.conversationManager.getSession(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found or expired`);
+      }
+      
+      // Add Claude's message to conversation history
+      this.conversationManager.addTurn(sessionId, 'claude', message);
+      
+      // Continue with Gemini
+      const { response, analysisProgress, canFinalize } = await this.conversationalGemini.continueConversation(
+        sessionId,
+        message,
+        includeCodeSnippets
+      );
+      
+      // Track Gemini's response
+      this.conversationManager.addTurn(sessionId, 'gemini', response);
+      
+      // Update progress
+      this.conversationManager.updateProgress(sessionId, {
+        confidenceLevel: analysisProgress,
+      });
+      
+      return {
+        response,
+        analysisProgress,
+        canFinalize,
+        status: session.status,
+      };
+    } catch (error) {
+      console.error('Failed to continue conversation:', error);
+      throw error;
+    }
+  }
+
+  async finalizeConversation(
+    sessionId: string,
+    summaryFormat?: 'detailed' | 'concise' | 'actionable',
+  ): Promise<DeepAnalysisResult> {
+    try {
+      // Validate session
+      const session = this.conversationManager.getSession(sessionId);
+      if (!session) {
+        throw new Error(`Session ${sessionId} not found or expired`);
+      }
+      
+      // Get final analysis from Gemini
+      const result = await this.conversationalGemini.finalizeConversation(
+        sessionId,
+        summaryFormat || 'detailed'
+      );
+      
+      // Extract additional insights from conversation manager
+      const conversationResults = this.conversationManager.extractResults(sessionId);
+      
+      // Merge results
+      return {
+        ...result,
+        metadata: {
+          ...result.metadata,
+          ...conversationResults.metadata,
+        },
+      };
+    } catch (error) {
+      console.error('Failed to finalize conversation:', error);
+      throw error;
+    }
+  }
+
+  async getConversationStatus(
+    sessionId: string,
+  ): Promise<{
+    sessionId: string;
+    status: string;
+    turnCount: number;
+    lastActivity: number;
+    progress: number;
+    canFinalize: boolean;
+  }> {
+    const session = this.conversationManager.getSession(sessionId);
+    if (!session) {
+      return {
+        sessionId,
+        status: 'not_found',
+        turnCount: 0,
+        lastActivity: 0,
+        progress: 0,
+        canFinalize: false,
+      };
+    }
+    
+    const canFinalize = this.conversationManager.shouldComplete(sessionId);
+    
+    return {
+      sessionId,
+      status: session.status,
+      turnCount: session.turns.length,
+      lastActivity: session.lastActivity,
+      progress: session.analysisProgress.confidenceLevel,
+      canFinalize,
     };
   }
 }

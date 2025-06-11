@@ -120,6 +120,13 @@ export interface DeepAnalysisResult {
     validatedHypotheses: Hypothesis[];
     ruledOutApproaches: string[];
   };
+  metadata?: {
+    sessionId?: string;
+    totalTurns?: number;
+    duration?: number;
+    completedSteps?: string[];
+    [key: string]: any;
+  };
 }
 
 export interface Action {

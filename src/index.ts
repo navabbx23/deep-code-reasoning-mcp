@@ -92,6 +92,36 @@ const PerformanceBottleneckSchema = z.object({
   profile_depth: z.number().min(1).max(5).default(3),
 });
 
+const StartConversationSchema = z.object({
+  claude_context: z.object({
+    attempted_approaches: z.array(z.string()),
+    partial_findings: z.array(z.any()),
+    stuck_description: z.string(),
+    code_scope: z.object({
+      files: z.array(z.string()),
+      entry_points: z.array(z.any()).optional(),
+      service_names: z.array(z.string()).optional(),
+    }),
+  }),
+  analysis_type: z.enum(['execution_trace', 'cross_system', 'performance', 'hypothesis_test']),
+  initial_question: z.string().optional(),
+});
+
+const ContinueConversationSchema = z.object({
+  session_id: z.string(),
+  message: z.string(),
+  include_code_snippets: z.boolean().optional(),
+});
+
+const FinalizeConversationSchema = z.object({
+  session_id: z.string(),
+  summary_format: z.enum(['detailed', 'concise', 'actionable']).optional(),
+});
+
+const GetConversationStatusSchema = z.object({
+  session_id: z.string(),
+});
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -250,6 +280,119 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['code_path'],
         },
       },
+      {
+        name: 'start_conversation',
+        description: 'Start a conversational analysis session between Claude and Gemini',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            claude_context: {
+              type: 'object',
+              properties: {
+                attempted_approaches: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'What Claude Code already tried',
+                },
+                partial_findings: {
+                  type: 'array',
+                  description: 'Any findings Claude Code discovered',
+                },
+                stuck_description: {
+                  type: 'string',
+                  description: 'Description of where Claude Code got stuck',
+                },
+                code_scope: {
+                  type: 'object',
+                  properties: {
+                    files: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'Files to analyze',
+                    },
+                    entry_points: {
+                      type: 'array',
+                      description: 'Specific functions/methods to start from',
+                    },
+                    service_names: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'Services involved in cross-system analysis',
+                    },
+                  },
+                  required: ['files'],
+                },
+              },
+              required: ['attempted_approaches', 'partial_findings', 'stuck_description', 'code_scope'],
+            },
+            analysis_type: {
+              type: 'string',
+              enum: ['execution_trace', 'cross_system', 'performance', 'hypothesis_test'],
+              description: 'Type of deep analysis to perform',
+            },
+            initial_question: {
+              type: 'string',
+              description: 'Initial question to start the conversation',
+            },
+          },
+          required: ['claude_context', 'analysis_type'],
+        },
+      },
+      {
+        name: 'continue_conversation',
+        description: 'Continue an ongoing analysis conversation',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            session_id: {
+              type: 'string',
+              description: 'ID of the conversation session',
+            },
+            message: {
+              type: 'string',
+              description: 'Claude\'s response or follow-up question',
+            },
+            include_code_snippets: {
+              type: 'boolean',
+              description: 'Whether to include code snippets in response',
+            },
+          },
+          required: ['session_id', 'message'],
+        },
+      },
+      {
+        name: 'finalize_conversation',
+        description: 'Complete the conversation and get final analysis results',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            session_id: {
+              type: 'string',
+              description: 'ID of the conversation session',
+            },
+            summary_format: {
+              type: 'string',
+              enum: ['detailed', 'concise', 'actionable'],
+              description: 'Format for the final summary',
+            },
+          },
+          required: ['session_id'],
+        },
+      },
+      {
+        name: 'get_conversation_status',
+        description: 'Check the status and progress of an ongoing conversation',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            session_id: {
+              type: 'string',
+              description: 'ID of the conversation session',
+            },
+          },
+          required: ['session_id'],
+        },
+      },
     ],
   };
 });
@@ -344,6 +487,83 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           parsed.code_path.entry_point,
           parsed.profile_depth,
           parsed.code_path.suspected_issues,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'start_conversation': {
+        const parsed = StartConversationSchema.parse(args);
+        const context: ClaudeCodeContext = {
+          attemptedApproaches: parsed.claude_context.attempted_approaches,
+          partialFindings: parsed.claude_context.partial_findings,
+          stuckPoints: [parsed.claude_context.stuck_description],
+          focusArea: parsed.claude_context.code_scope as CodeScope,
+          analysisBudgetRemaining: 60,
+        };
+
+        const result = await deepReasoner.startConversation(
+          context,
+          parsed.analysis_type,
+          parsed.initial_question,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'continue_conversation': {
+        const parsed = ContinueConversationSchema.parse(args);
+        const result = await deepReasoner.continueConversation(
+          parsed.session_id,
+          parsed.message,
+          parsed.include_code_snippets,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'finalize_conversation': {
+        const parsed = FinalizeConversationSchema.parse(args);
+        const result = await deepReasoner.finalizeConversation(
+          parsed.session_id,
+          parsed.summary_format,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_conversation_status': {
+        const parsed = GetConversationStatusSchema.parse(args);
+        const result = await deepReasoner.getConversationStatus(
+          parsed.session_id,
         );
 
         return {

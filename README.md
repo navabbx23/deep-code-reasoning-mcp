@@ -17,6 +17,7 @@ The "escalation" model treats LLMs like heterogeneous microservices - route to t
 ## Features
 
 - **Gemini 2.5 Pro Preview**: Uses Google's latest Gemini 2.5 Pro Preview (05-06) model with 1M token context window
+- **Conversational Analysis**: NEW! AI-to-AI dialogues between Claude and Gemini for iterative problem-solving
 - **Execution Flow Tracing**: Understands data flow and state transformations, not just function calls
 - **Cross-System Impact Analysis**: Models how changes propagate across service boundaries
 - **Performance Modeling**: Identifies N+1 patterns, memory leaks, and algorithmic bottlenecks
@@ -99,7 +100,63 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
 
 **Note**: The tool parameters use snake_case naming convention and are validated using Zod schemas. The actual implementation provides more detailed type safety than shown in these simplified examples. Full TypeScript type definitions are available in `src/models/types.ts`.
 
-### escalate_analysis
+### Conversational Analysis Tools
+
+The server now includes AI-to-AI conversational tools that enable Claude and Gemini to engage in multi-turn dialogues for complex analysis:
+
+#### start_conversation
+Initiates a conversational analysis session between Claude and Gemini.
+
+```typescript
+{
+  claude_context: {
+    attempted_approaches: string[];      // What Claude tried
+    partial_findings: any[];            // What Claude found
+    stuck_description: string;          // Where Claude got stuck
+    code_scope: {
+      files: string[];                  // Files to analyze
+      entry_points?: CodeLocation[];    // Starting points
+      service_names?: string[];         // Services involved
+    }
+  };
+  analysis_type: 'execution_trace' | 'cross_system' | 'performance' | 'hypothesis_test';
+  initial_question?: string;            // Optional opening question
+}
+```
+
+#### continue_conversation
+Continues an active conversation with Claude's response or follow-up question.
+
+```typescript
+{
+  session_id: string;                   // Active session ID
+  message: string;                      // Claude's message to Gemini
+  include_code_snippets?: boolean;      // Enrich with code context
+}
+```
+
+#### finalize_conversation
+Completes the conversation and generates structured analysis results.
+
+```typescript
+{
+  session_id: string;                   // Active session ID
+  summary_format: 'detailed' | 'concise' | 'actionable';
+}
+```
+
+#### get_conversation_status
+Checks the status and progress of an ongoing conversation.
+
+```typescript
+{
+  session_id: string;                   // Session ID to check
+}
+```
+
+### Traditional Analysis Tools
+
+#### escalate_analysis
 Main tool for handing off complex analysis from Claude Code to Gemini.
 
 ```typescript
@@ -180,6 +237,37 @@ Test specific theories about code behavior.
 ```
 
 ## Example Use Cases
+
+### Conversational Analysis Example
+
+When Claude needs deep iterative analysis with Gemini:
+
+```javascript
+// 1. Start conversation
+const session = await start_conversation({
+  claude_context: {
+    attempted_approaches: ["Checked for N+1 queries", "Profiled database calls"],
+    partial_findings: [{ type: "performance", description: "Multiple DB queries in loop" }],
+    stuck_description: "Can't determine if queries are optimizable",
+    code_scope: { files: ["src/services/UserService.ts"] }
+  },
+  analysis_type: "performance",
+  initial_question: "Are these queries necessary or can they be batched?"
+});
+
+// 2. Continue with follow-ups
+const response = await continue_conversation({
+  session_id: session.sessionId,
+  message: "The queries fetch user preferences. Could we use a join instead?",
+  include_code_snippets: true
+});
+
+// 3. Finalize when ready
+const results = await finalize_conversation({
+  session_id: session.sessionId,
+  summary_format: "actionable"
+});
+```
 
 ### Case 1: Distributed Trace Analysis
 
