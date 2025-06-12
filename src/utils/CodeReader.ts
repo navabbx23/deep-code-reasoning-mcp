@@ -53,7 +53,7 @@ export class CodeReader {
           `Cannot read file ${filePath}: ${error.message}`,
           code,
           filePath,
-          'read'
+          'read',
         );
       }
       throw error;

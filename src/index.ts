@@ -11,7 +11,7 @@ import { z } from 'zod';
 import * as dotenv from 'dotenv';
 
 import { DeepCodeReasonerV2 } from './analyzers/DeepCodeReasonerV2.js';
-import type { ClaudeCodeContext, CodeScope } from './models/types.js';
+import type { ClaudeCodeContext } from './models/types.js';
 import { ErrorClassifier } from './utils/ErrorClassifier.js';
 import { InputValidator } from './utils/InputValidator.js';
 
@@ -406,10 +406,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case 'escalate_analysis': {
         const parsed = EscalateAnalysisSchema.parse(args);
-        
+
         // Validate and sanitize the Claude context
         const validatedContext = InputValidator.validateClaudeContext(parsed.claude_context);
-        
+
         // Override with specific values from the parsed input
         const context: ClaudeCodeContext = {
           ...validatedContext,
@@ -434,7 +434,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'trace_execution_path': {
         const parsed = TraceExecutionPathSchema.parse(args);
-        
+
         // Validate the entry point file path
         const validatedPath = InputValidator.validateFilePaths([parsed.entry_point.file])[0];
         if (!validatedPath) {
@@ -443,7 +443,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             'Invalid entry point file path',
           );
         }
-        
+
         const result = await deepReasoner.traceExecutionPath(
           { ...parsed.entry_point, file: validatedPath },
           parsed.max_depth,
@@ -462,7 +462,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'hypothesis_test': {
         const parsed = HypothesisTestSchema.parse(args);
-        
+
         // Validate file paths
         const validatedFiles = InputValidator.validateFilePaths(parsed.code_scope.files);
         if (validatedFiles.length === 0) {
@@ -471,7 +471,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             'No valid file paths provided',
           );
         }
-        
+
         const result = await deepReasoner.testHypothesis(
           InputValidator.validateString(parsed.hypothesis, 2000),
           validatedFiles,
@@ -490,7 +490,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'cross_system_impact': {
         const parsed = CrossSystemImpactSchema.parse(args);
-        
+
         // Validate file paths
         const validatedFiles = InputValidator.validateFilePaths(parsed.change_scope.files);
         if (validatedFiles.length === 0) {
@@ -499,7 +499,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             'No valid file paths provided',
           );
         }
-        
+
         const result = await deepReasoner.analyzeCrossSystemImpact(
           validatedFiles,
           parsed.impact_types,
@@ -517,7 +517,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'performance_bottleneck': {
         const parsed = PerformanceBottleneckSchema.parse(args);
-        
+
         // Validate the entry point file path
         const validatedPath = InputValidator.validateFilePaths([parsed.code_path.entry_point.file])[0];
         if (!validatedPath) {
@@ -526,12 +526,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             'Invalid entry point file path',
           );
         }
-        
+
         const result = await deepReasoner.analyzePerformance(
           { ...parsed.code_path.entry_point, file: validatedPath },
           parsed.profile_depth,
-          parsed.code_path.suspected_issues ? 
-            InputValidator.validateStringArray(parsed.code_path.suspected_issues) : 
+          parsed.code_path.suspected_issues ?
+            InputValidator.validateStringArray(parsed.code_path.suspected_issues) :
             undefined,
         );
 
@@ -547,10 +547,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case 'start_conversation': {
         const parsed = StartConversationSchema.parse(args);
-        
+
         // Validate and sanitize the Claude context
         const validatedContext = InputValidator.validateClaudeContext(parsed.claude_context);
-        
+
         // Override default budget
         const context: ClaudeCodeContext = {
           ...validatedContext,
@@ -637,30 +637,30 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         `Invalid parameters: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')}`,
       );
     }
-    
+
     // Use ErrorClassifier for consistent error handling
     if (error instanceof Error) {
       const classification = ErrorClassifier.classify(error);
-      
+
       switch (classification.category) {
         case 'session':
           throw new McpError(
             ErrorCode.InvalidRequest,
             classification.description,
           );
-          
+
         case 'api':
           throw new McpError(
             ErrorCode.InternalError,
             classification.description,
           );
-          
+
         case 'filesystem':
           throw new McpError(
             ErrorCode.InvalidRequest,
             classification.description,
           );
-          
+
         default:
           console.error('Unhandled error in request handler:', error);
           throw new McpError(
@@ -669,7 +669,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           );
       }
     }
-    
+
     throw error;
   }
 });

@@ -15,7 +15,7 @@ export class SecureCodeReader {
     '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
     '.py', '.java', '.go', '.rs', '.c', '.cpp', '.h',
     '.json', '.yaml', '.yml', '.toml', '.xml',
-    '.md', '.txt', '.gitignore', '.env.example'
+    '.md', '.txt', '.gitignore', '.env.example',
   ]);
 
   constructor(projectRoot: string = process.cwd()) {
@@ -30,14 +30,14 @@ export class SecureCodeReader {
   private async validatePath(filePath: string): Promise<string> {
     // Resolve to absolute path
     const absolutePath = path.resolve(this.projectRoot, filePath);
-    
+
     // Critical security check: ensure the resolved path is within project bounds
     if (!absolutePath.startsWith(this.projectRoot + path.sep)) {
       throw new FileSystemError(
         `Security violation: Path traversal attempt detected for ${filePath}`,
         'PATH_TRAVERSAL',
         filePath,
-        'validate'
+        'validate',
       );
     }
 
@@ -48,7 +48,7 @@ export class SecureCodeReader {
         `Security violation: File type not allowed: ${ext}`,
         'INVALID_FILE_TYPE',
         filePath,
-        'validate'
+        'validate',
       );
     }
 
@@ -60,7 +60,7 @@ export class SecureCodeReader {
           `Path is not a file: ${filePath}`,
           'NOT_A_FILE',
           filePath,
-          'validate'
+          'validate',
         );
       }
       if (stats.size > this.MAX_FILE_SIZE) {
@@ -68,7 +68,7 @@ export class SecureCodeReader {
           `File too large: ${stats.size} bytes (max: ${this.MAX_FILE_SIZE})`,
           'FILE_TOO_LARGE',
           filePath,
-          'validate'
+          'validate',
         );
       }
     } catch (error) {
@@ -78,7 +78,7 @@ export class SecureCodeReader {
         `Cannot access file ${filePath}: ${(error as Error).message}`,
         code,
         filePath,
-        'validate'
+        'validate',
       );
     }
 
@@ -120,7 +120,7 @@ export class SecureCodeReader {
   async readFile(filePath: string): Promise<string> {
     // Validate the path first
     const safePath = await this.validatePath(filePath);
-    
+
     // Check cache using the original path
     if (this.cache.has(filePath)) {
       return this.cache.get(filePath)!;
@@ -137,7 +137,7 @@ export class SecureCodeReader {
         `Cannot read file ${filePath}: ${(error as Error).message}`,
         code,
         filePath,
-        'read'
+        'read',
       );
     }
   }
@@ -160,7 +160,7 @@ export class SecureCodeReader {
   async findRelatedFiles(baseFile: string, patterns: string[] = []): Promise<string[]> {
     // Validate the base file path first
     const safeBasePath = await this.validatePath(baseFile);
-    
+
     const relatedFiles: string[] = [];
     const dir = path.dirname(safeBasePath);
     const baseName = path.basename(baseFile, path.extname(baseFile));
@@ -170,10 +170,21 @@ export class SecureCodeReader {
 
       for (const file of files) {
         const filePath = path.join(dir, file);
-        
+
+        // Skip directories and symlinks
+        try {
+          const stats = await fs.lstat(filePath);
+          if (!stats.isFile()) {
+            continue;
+          }
+        } catch (error) {
+          // Skip if we can't access the file
+          continue;
+        }
+
         // Convert back to relative path for consistency
         const relativePath = path.relative(this.projectRoot, filePath);
-        
+
         // Skip if not a valid file type
         const ext = path.extname(file).toLowerCase();
         if (ext && !this.ALLOWED_EXTENSIONS.has(ext)) {

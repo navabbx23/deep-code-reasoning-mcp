@@ -92,20 +92,20 @@ export class ConversationManager {
   acquireLock(sessionId: string): boolean {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
-    
+
     // Check if session has timed out
     if (Date.now() - session.lastActivity > this.SESSION_TIMEOUT_MS) {
       session.status = 'abandoned';
       return false;
     }
-    
+
     // Only acquire lock if session is active
     if (session.status === 'active') {
       session.status = 'processing';
       session.lastActivity = Date.now();
       return true;
     }
-    
+
     return false;
   }
 

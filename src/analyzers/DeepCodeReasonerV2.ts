@@ -236,7 +236,7 @@ export class DeepCodeReasonerV2 {
   private createErrorResult(error: Error, context: ClaudeCodeContext): DeepAnalysisResult {
     // Extract structured error information
     const errorDetails = this.extractErrorDetails(error);
-    
+
     return {
       status: 'partial',
       findings: {
@@ -261,7 +261,7 @@ export class DeepCodeReasonerV2 {
         newInsights: [{
           type: 'error',
           description: errorDetails.insight,
-          supporting_evidence: [error.stack || error.message]
+          supporting_evidence: [error.stack || error.message],
         }],
         validatedHypotheses: [],
         ruledOutApproaches: context.attemptedApproaches,
@@ -270,7 +270,7 @@ export class DeepCodeReasonerV2 {
         errorType: error.name,
         errorCode: errorDetails.code,
         errorSource: errorDetails.source,
-      }
+      },
     };
   }
 
@@ -285,7 +285,7 @@ export class DeepCodeReasonerV2 {
     const classification = ErrorClassifier.classify(error);
     const nextSteps = ErrorClassifier.getNextSteps(classification);
     const message = error.message;
-    
+
     // Map classification to detailed error structure
     switch (classification.category) {
       case 'api':
@@ -293,20 +293,20 @@ export class DeepCodeReasonerV2 {
           description: classification.description,
           rootCauses: [{
             type: classification.code === 'RATE_LIMIT_ERROR' ? 'performance' : 'configuration',
-            description: classification.code === 'RATE_LIMIT_ERROR' 
+            description: classification.code === 'RATE_LIMIT_ERROR'
               ? 'API rate limit or quota exceeded'
               : 'Gemini API authentication or configuration issue',
             location: { file: 'ConversationalGeminiService.ts', line: 0 },
-            evidence: [message]
+            evidence: [message],
           }],
           nextSteps,
           insight: classification.code === 'RATE_LIMIT_ERROR'
             ? 'The system is making too many API requests in a short time period'
             : 'The Gemini API service is not properly configured or authenticated',
           code: classification.code,
-          source: 'external_api'
+          source: 'external_api',
         };
-        
+
       case 'filesystem':
         return {
           description: classification.description,
@@ -314,14 +314,14 @@ export class DeepCodeReasonerV2 {
             type: 'architecture',
             description: 'File access or permission issue',
             location: { file: 'CodeReader.ts', line: 0 },
-            evidence: [message]
+            evidence: [message],
           }],
           nextSteps,
           insight: 'The code reader cannot access required files',
           code: classification.code || 'FILE_ACCESS_ERROR',
-          source: 'filesystem'
+          source: 'filesystem',
         };
-        
+
       case 'session':
         return {
           description: classification.description,
@@ -329,14 +329,14 @@ export class DeepCodeReasonerV2 {
             type: 'architecture',
             description: 'Conversation session state issue',
             location: { file: 'ConversationManager.ts', line: 0 },
-            evidence: [message]
+            evidence: [message],
           }],
           nextSteps,
           insight: 'The conversation session is in an invalid state or does not exist',
           code: classification.code || 'SESSION_ERROR',
-          source: 'internal'
+          source: 'internal',
         };
-        
+
       default:
         return {
           description: classification.description,
@@ -344,12 +344,12 @@ export class DeepCodeReasonerV2 {
             type: 'unknown',
             description: error.name || 'Unknown error',
             location: { file: 'unknown', line: 0 },
-            evidence: [message, error.stack || '']
+            evidence: [message, error.stack || ''],
           }],
           nextSteps,
           insight: 'An unexpected error occurred during deep code analysis',
           code: 'UNKNOWN_ERROR',
-          source: 'unknown'
+          source: 'unknown',
         };
     }
   }
