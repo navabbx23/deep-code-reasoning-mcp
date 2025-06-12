@@ -14,6 +14,7 @@ import { DeepCodeReasonerV2 } from './analyzers/DeepCodeReasonerV2.js';
 import type { ClaudeCodeContext } from './models/types.js';
 import { ErrorClassifier } from './utils/ErrorClassifier.js';
 import { InputValidator } from './utils/InputValidator.js';
+import { logger } from './utils/Logger.js';
 
 // Load environment variables
 dotenv.config();
@@ -811,20 +812,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
-  console.error('[MCP] Starting Deep Code Reasoning MCP server...');
+  logger.info('Starting Deep Code Reasoning MCP server...');
   
   const transport = new StdioServerTransport();
-  console.error('[MCP] Connecting to transport...');
+  logger.info('Connecting to transport...');
   
   await server.connect(transport);
   
-  console.error('[MCP] Server connected successfully');
-  console.error(`[MCP] GEMINI_API_KEY: ${GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED - server will return errors'}`);
-  console.error('[MCP] Using Gemini model: gemini-2.5-pro-preview-05-06');
-  console.error('[MCP] Ready to handle requests');
+  logger.info('Server connected successfully');
+  logger.info(`GEMINI_API_KEY: ${GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED - server will return errors'}`);
+  logger.info('Using Gemini model: gemini-2.5-pro-preview-05-06');
+  logger.info('Ready to handle requests');
 }
 
 main().catch((error) => {
-  console.error('Fatal error in main():', error);
+  logger.error('Fatal error in main():', error);
   process.exit(1);
 });
