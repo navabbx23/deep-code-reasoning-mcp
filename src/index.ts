@@ -124,6 +124,25 @@ const GetConversationStatusSchema = z.object({
   session_id: z.string(),
 });
 
+const RunHypothesisTournamentSchema = z.object({
+  claude_context: z.object({
+    attempted_approaches: z.array(z.string()),
+    partial_findings: z.array(z.any()),
+    stuck_description: z.string(),
+    code_scope: z.object({
+      files: z.array(z.string()),
+      entry_points: z.array(z.any()).optional(),
+      service_names: z.array(z.string()).optional(),
+    }),
+  }),
+  issue: z.string(),
+  tournament_config: z.object({
+    max_hypotheses: z.number().min(2).max(20).optional(),
+    max_rounds: z.number().min(1).max(5).optional(),
+    parallel_sessions: z.number().min(1).max(10).optional(),
+  }).optional(),
+});
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -395,6 +414,82 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['session_id'],
         },
       },
+      {
+        name: 'run_hypothesis_tournament',
+        description: 'Run a competitive hypothesis tournament to find root causes. Multiple AI conversations test different theories in parallel, with evidence-based scoring and elimination rounds.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            claude_context: {
+              type: 'object',
+              properties: {
+                attempted_approaches: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'What Claude Code already tried',
+                },
+                partial_findings: {
+                  type: 'array',
+                  description: 'Any findings Claude Code discovered',
+                },
+                stuck_description: {
+                  type: 'string',
+                  description: 'Description of where Claude Code got stuck',
+                },
+                code_scope: {
+                  type: 'object',
+                  properties: {
+                    files: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'Files to analyze',
+                    },
+                    entry_points: {
+                      type: 'array',
+                      description: 'Specific functions/methods to start from',
+                    },
+                    service_names: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'Services involved in cross-system analysis',
+                    },
+                  },
+                  required: ['files'],
+                },
+              },
+              required: ['attempted_approaches', 'partial_findings', 'stuck_description', 'code_scope'],
+            },
+            issue: {
+              type: 'string',
+              description: 'Description of the issue to investigate',
+            },
+            tournament_config: {
+              type: 'object',
+              properties: {
+                max_hypotheses: {
+                  type: 'number',
+                  minimum: 2,
+                  maximum: 20,
+                  description: 'Number of initial hypotheses to generate (default: 6)',
+                },
+                max_rounds: {
+                  type: 'number',
+                  minimum: 1,
+                  maximum: 5,
+                  description: 'Maximum tournament rounds (default: 3)',
+                },
+                parallel_sessions: {
+                  type: 'number',
+                  minimum: 1,
+                  maximum: 10,
+                  description: 'Max concurrent conversations (default: 4)',
+                },
+              },
+            },
+          },
+          required: ['claude_context', 'issue'],
+        },
+      },
     ],
   };
 });
@@ -612,6 +707,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parsed = GetConversationStatusSchema.parse(args);
         const result = await deepReasoner.getConversationStatus(
           parsed.session_id,
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'run_hypothesis_tournament': {
+        const parsed = RunHypothesisTournamentSchema.parse(args);
+
+        // Validate and sanitize the Claude context
+        const validatedContext = InputValidator.validateClaudeContext(parsed.claude_context);
+
+        // Override with specific values from the parsed input
+        const context: ClaudeCodeContext = {
+          ...validatedContext,
+          analysisBudgetRemaining: 300, // 5 minutes for tournament
+        };
+
+        const tournamentConfig = {
+          maxHypotheses: parsed.tournament_config?.max_hypotheses ?? 6,
+          maxRounds: parsed.tournament_config?.max_rounds ?? 3,
+          parallelSessions: parsed.tournament_config?.parallel_sessions ?? 4,
+        };
+
+        const result = await deepReasoner.runHypothesisTournament(
+          context,
+          InputValidator.validateString(parsed.issue, 1000),
+          tournamentConfig,
         );
 
         return {

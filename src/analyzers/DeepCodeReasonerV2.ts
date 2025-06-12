@@ -2,6 +2,7 @@ import type {
   ClaudeCodeContext,
   DeepAnalysisResult,
   CodeLocation,
+  TournamentResult,
 } from '../models/types.js';
 import { GeminiService } from '../services/GeminiService.js';
 import { ConversationalGeminiService } from '../services/ConversationalGeminiService.js';
@@ -9,18 +10,23 @@ import { ConversationManager } from '../services/ConversationManager.js';
 import { SecureCodeReader } from '../utils/SecureCodeReader.js';
 import { ErrorClassifier } from '../utils/ErrorClassifier.js';
 import { ConversationLockedError, SessionNotFoundError } from '../errors/index.js';
+import { HypothesisTournamentService } from '../services/HypothesisTournamentService.js';
 
 export class DeepCodeReasonerV2 {
   private geminiService: GeminiService;
   private conversationalGemini: ConversationalGeminiService;
   private conversationManager: ConversationManager;
   private codeReader: SecureCodeReader;
+  private tournamentService: HypothesisTournamentService;
+  private geminiApiKey: string;
 
   constructor(geminiApiKey: string) {
+    this.geminiApiKey = geminiApiKey;
     this.geminiService = new GeminiService(geminiApiKey);
     this.conversationalGemini = new ConversationalGeminiService(geminiApiKey);
     this.conversationManager = new ConversationManager();
     this.codeReader = new SecureCodeReader();
+    this.tournamentService = new HypothesisTournamentService(geminiApiKey);
   }
 
   async escalateFromClaudeCode(
@@ -530,5 +536,39 @@ export class DeepCodeReasonerV2 {
       progress: session.analysisProgress.confidenceLevel,
       canFinalize,
     };
+  }
+
+  async runHypothesisTournament(
+    context: ClaudeCodeContext,
+    issue: string,
+    tournamentConfig?: {
+      maxHypotheses?: number;
+      maxRounds?: number;
+      parallelSessions?: number;
+    },
+  ): Promise<TournamentResult> {
+    try {
+      // Override tournament config if provided
+      const tournament = tournamentConfig
+        ? new HypothesisTournamentService(
+            this.geminiApiKey,
+            tournamentConfig,
+          )
+        : this.tournamentService;
+
+      // Run the tournament
+      const result = await tournament.runTournament(context, issue);
+
+      return result;
+    } catch (error) {
+      console.error('Hypothesis tournament failed:', {
+        error,
+        issue,
+        tournamentConfig,
+        contextFiles: context.focusArea.files,
+        entryPoints: context.focusArea.entryPoints,
+      });
+      throw error;
+    }
   }
 }

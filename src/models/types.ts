@@ -148,3 +148,55 @@ export interface Insight {
   description: string;
   supporting_evidence: string[];
 }
+
+// Hypothesis Tournament System types
+export interface HypothesisDefinition {
+  id: string;
+  theory: string;
+  testApproach: string;
+  category: 'performance' | 'bug' | 'security' | 'architecture' | 'integration';
+  priority: number; // 0-1, higher = more likely
+}
+
+export interface Evidence {
+  type: 'supporting' | 'contradicting' | 'neutral';
+  description: string;
+  location?: CodeLocation;
+  snippet?: string;
+  confidence: number; // 0-1
+  discoveredAt: number; // timestamp
+}
+
+export interface HypothesisExplorationResult {
+  hypothesis: HypothesisDefinition;
+  sessionId: string;
+  evidence: Evidence[];
+  overallConfidence: number; // 0-1
+  explorationDepth: number; // How many conversation turns
+  keyInsights: string[];
+  reproductionSteps?: string[];
+  relatedFindings?: Finding[]; // Serendipitous discoveries
+}
+
+export interface TournamentRound {
+  roundNumber: number;
+  hypotheses: HypothesisDefinition[];
+  results: HypothesisExplorationResult[];
+  eliminatedHypotheses: string[]; // hypothesis IDs
+  insights: string[]; // Cross-hypothesis insights
+}
+
+export interface TournamentResult {
+  issue: string;
+  totalHypotheses: number;
+  rounds: TournamentRound[];
+  winner?: HypothesisExplorationResult;
+  runnerUp?: HypothesisExplorationResult;
+  allFindings: Finding[]; // All issues discovered, even unrelated
+  recommendations: {
+    primary: Action[];
+    secondary: Action[]; // From runner-up or other strong hypotheses
+  };
+  duration: number; // Total time in ms
+  parallelEfficiency: number; // How much time saved by parallelization
+}
