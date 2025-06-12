@@ -5,7 +5,7 @@
 export class SessionError extends Error {
   readonly code: string;
   readonly sessionId?: string;
-  
+
   constructor(message: string, code: string = 'SESSION_ERROR', sessionId?: string) {
     super(message);
     this.name = 'SessionError';
@@ -18,7 +18,7 @@ export class ApiError extends Error {
   readonly code: string;
   readonly statusCode?: number;
   readonly service: string;
-  
+
   constructor(message: string, code: string = 'API_ERROR', service: string = 'unknown', statusCode?: number) {
     super(message);
     this.name = 'ApiError';
@@ -32,7 +32,7 @@ export class FileSystemError extends Error {
   readonly code: string;
   readonly path?: string;
   readonly operation?: string;
-  
+
   constructor(message: string, code: string = 'FS_ERROR', path?: string, operation?: string) {
     super(message);
     this.name = 'FileSystemError';
@@ -44,7 +44,7 @@ export class FileSystemError extends Error {
 
 export class RateLimitError extends ApiError {
   readonly retryAfter?: number;
-  
+
   constructor(message: string, service: string = 'gemini', retryAfter?: number) {
     super(message, 'RATE_LIMIT_ERROR', service, 429);
     this.name = 'RateLimitError';

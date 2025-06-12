@@ -3,7 +3,7 @@ import type {
   ClaudeCodeContext,
   DeepAnalysisResult,
 } from '../models/types.js';
-import { SessionError, SessionNotFoundError } from '../errors/index.js';
+import { SessionNotFoundError } from '../errors/index.js';
 import { PromptSanitizer } from '../utils/PromptSanitizer.js';
 
 export interface ConversationContext {
@@ -107,7 +107,7 @@ export class ConversationalGeminiService {
 
     // Sanitize the incoming message
     const sanitizedMessage = PromptSanitizer.sanitizeString(message);
-    
+
     // Check for potential injection attempts
     if (PromptSanitizer.containsInjectionAttempt(message)) {
       console.warn(`Potential injection attempt in session ${sessionId}:`, message.substring(0, 100));
@@ -329,12 +329,12 @@ Structure your response as JSON with the following format:
             const line = parseInt(lineNum);
             const start = Math.max(0, line - 3);
             const end = Math.min(lines.length, line + 3);
-            
+
             // Use safe formatting for code snippets
             const snippet = lines.slice(start, end).join('\n');
             enrichedParts.push(PromptSanitizer.formatFileContent(
               `${file} (lines ${start + 1}-${end})`,
-              snippet
+              snippet,
             ));
           }
         }

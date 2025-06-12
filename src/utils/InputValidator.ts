@@ -7,13 +7,13 @@ import type { ClaudeCodeContext, Finding } from '../models/types.js';
 export class InputValidator {
   // Safe string schema with length limits
   static readonly SafeString = z.string()
-    .max(1000)
+    .max(2000)
     .regex(/^[^<>{}]*$/, 'String contains potentially unsafe characters');
 
   // Safe filename schema
   static readonly SafeFilename = z.string()
     .max(255)
-    .regex(/^[a-zA-Z0-9._\-\/]+$/, 'Invalid filename format')
+    .regex(/^[a-zA-Z0-9._\-/]+$/, 'Invalid filename format')
     .refine(path => !path.includes('..'), 'Path traversal detected');
 
   // Array of safe strings
@@ -95,11 +95,11 @@ export class InputValidator {
   /**
    * Validate a single string input
    */
-  static validateString(input: unknown, maxLength: number = 1000): string {
+  static validateString(input: unknown, maxLength: number = 2000): string {
     if (typeof input !== 'string') {
       throw new Error('Input must be a string');
     }
-    
+
     return this.SafeString.parse(input.substring(0, maxLength));
   }
 
@@ -110,7 +110,7 @@ export class InputValidator {
     if (!Array.isArray(input)) {
       return [];
     }
-    
+
     return input
       .slice(0, maxItems)
       .filter(item => typeof item === 'string')
@@ -134,7 +134,7 @@ export class InputValidator {
         console.warn(`Invalid file path rejected: ${path}`);
       }
     }
-    
+
     return validPaths;
   }
 }

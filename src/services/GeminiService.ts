@@ -361,7 +361,7 @@ Provide a detailed execution trace with insights about the actual runtime behavi
     }
 
     const userData = {
-      'Code Files for Analysis': codeFileData.join('\n\n')
+      'Code Files for Analysis': codeFileData.join('\n\n'),
     };
 
     const prompt = PromptSanitizer.createSafePrompt(systemInstructions, userData);
@@ -393,7 +393,7 @@ Focus on both direct and indirect impacts across service boundaries.`;
 
     const userData = {
       'Files with Changes': PromptSanitizer.sanitizeStringArray(changeScope),
-      'Code Files for Analysis': codeFileData.join('\n\n')
+      'Code Files for Analysis': codeFileData.join('\n\n'),
     };
 
     const prompt = PromptSanitizer.createSafePrompt(systemInstructions, userData);
@@ -426,7 +426,7 @@ Provide specific, actionable performance improvements.`;
 
     const userData = {
       'Suspected Issues': PromptSanitizer.sanitizeStringArray(suspectedIssues),
-      'Code Files for Analysis': codeFileData.join('\n\n')
+      'Code Files for Analysis': codeFileData.join('\n\n'),
     };
 
     const prompt = PromptSanitizer.createSafePrompt(systemInstructions, userData);
@@ -460,7 +460,7 @@ Be rigorous and evidence-based in your analysis.`;
     const userData = {
       'Hypothesis': PromptSanitizer.sanitizeString(hypothesis),
       'Test Approach': PromptSanitizer.sanitizeString(testApproach),
-      'Code Files for Analysis': codeFileData.join('\n\n')
+      'Code Files for Analysis': codeFileData.join('\n\n'),
     };
 
     const prompt = PromptSanitizer.createSafePrompt(systemInstructions, userData);
