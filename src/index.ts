@@ -731,11 +731,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           analysisBudgetRemaining: 300, // 5 minutes for tournament
         };
 
-        const tournamentConfig = parsed.tournament_config ? {
-          maxHypotheses: parsed.tournament_config.max_hypotheses,
-          maxRounds: parsed.tournament_config.max_rounds,
-          parallelSessions: parsed.tournament_config.parallel_sessions,
-        } : undefined;
+        const tournamentConfig = {
+          maxHypotheses: parsed.tournament_config?.max_hypotheses ?? 6,
+          maxRounds: parsed.tournament_config?.max_rounds ?? 3,
+          parallelSessions: parsed.tournament_config?.parallel_sessions ?? 4,
+        };
 
         const result = await deepReasoner.runHypothesisTournament(
           context,

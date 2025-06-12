@@ -561,7 +561,13 @@ export class DeepCodeReasonerV2 {
 
       return result;
     } catch (error) {
-      console.error('Hypothesis tournament failed:', error);
+      console.error('Hypothesis tournament failed:', {
+        error,
+        issue,
+        tournamentConfig,
+        contextFiles: context.code_scope.files,
+        entryPoints: context.code_scope.entry_points,
+      });
       throw error;
     }
   }
