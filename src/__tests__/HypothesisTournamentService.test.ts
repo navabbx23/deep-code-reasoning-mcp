@@ -1,9 +1,14 @@
 import { describe, it, expect } from '@jest/globals';
 import { HypothesisTournamentService } from '../services/HypothesisTournamentService.js';
 import type { 
-  ClaudeContext,
-  TournamentConfig
-} from '../types.js';
+  ClaudeCodeContext
+} from '../models/types.js';
+
+interface TournamentConfig {
+  maxHypotheses?: number;
+  maxRounds?: number;
+  parallelSessions?: number;
+}
 
 describe('HypothesisTournamentService', () => {
   // Note: These are integration tests that require ANTHROPIC_API_KEY to be set
@@ -11,13 +16,19 @@ describe('HypothesisTournamentService', () => {
   
   const mockApiKey = process.env.ANTHROPIC_API_KEY || 'test-api-key';
   
-  const mockContext: ClaudeContext = {
-    attempted_approaches: ['Test approach'],
-    partial_findings: ['Test finding'],
-    stuck_description: 'Test stuck',
-    code_scope: {
+  const mockContext: ClaudeCodeContext = {
+    attemptedApproaches: ['Test approach'],
+    partialFindings: [{
+      type: 'bug',
+      severity: 'low',
+      location: { file: 'test.ts', line: 1 },
+      description: 'Test finding',
+      evidence: []
+    }],
+    stuckPoints: ['Test stuck'],
+    focusArea: {
       files: ['src/services/HypothesisTournamentService.ts'],
-      entry_points: []
+      entryPoints: []
     },
     analysisBudgetRemaining: 300
   };
@@ -46,7 +57,7 @@ describe('HypothesisTournamentService', () => {
       
       const invalidContext = {
         ...mockContext,
-        code_scope: undefined as any
+        focusArea: undefined as any
       };
 
       // Should throw or handle invalid context
@@ -57,11 +68,11 @@ describe('HypothesisTournamentService', () => {
     it('should handle empty file list gracefully', async () => {
       const service = new HypothesisTournamentService(mockApiKey);
       
-      const emptyFileContext: ClaudeContext = {
+      const emptyFileContext: ClaudeCodeContext = {
         ...mockContext,
-        code_scope: {
+        focusArea: {
           files: [],
-          entry_points: []
+          entryPoints: []
         }
       };
 

@@ -565,8 +565,8 @@ export class DeepCodeReasonerV2 {
         error,
         issue,
         tournamentConfig,
-        contextFiles: context.code_scope.files,
-        entryPoints: context.code_scope.entry_points,
+        contextFiles: context.focusArea.files,
+        entryPoints: context.focusArea.entryPoints,
       });
       throw error;
     }
