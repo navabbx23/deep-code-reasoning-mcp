@@ -19,11 +19,6 @@ import { InputValidator } from './utils/InputValidator.js';
 dotenv.config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
-  console.error('ERROR: GEMINI_API_KEY environment variable is required');
-  console.error('Please set GEMINI_API_KEY in your .env file or environment');
-  process.exit(1);
-}
 
 const server = new Server(
   {
@@ -37,7 +32,11 @@ const server = new Server(
   },
 );
 
-const deepReasoner = new DeepCodeReasonerV2(GEMINI_API_KEY);
+// Initialize deepReasoner as null if no API key
+let deepReasoner: DeepCodeReasonerV2 | null = null;
+if (GEMINI_API_KEY) {
+  deepReasoner = new DeepCodeReasonerV2(GEMINI_API_KEY);
+}
 
 const EscalateAnalysisSchema = z.object({
   claude_context: z.object({
@@ -498,6 +497,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
 
+    // Check if API key is configured
+    if (!deepReasoner) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        'GEMINI_API_KEY is not configured. Please set the GEMINI_API_KEY environment variable.',
+      );
+    }
+
     switch (name) {
       case 'escalate_analysis': {
         const parsed = EscalateAnalysisSchema.parse(args);
@@ -804,10 +811,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 async function main() {
+  console.error('[MCP] Starting Deep Code Reasoning MCP server...');
+  
   const transport = new StdioServerTransport();
+  console.error('[MCP] Connecting to transport...');
+  
   await server.connect(transport);
-  console.error('Deep Code Reasoning MCP server running with Gemini');
-  console.error('Using Gemini model: gemini-2.5-pro-preview-05-06');
+  
+  console.error('[MCP] Server connected successfully');
+  console.error(`[MCP] GEMINI_API_KEY: ${GEMINI_API_KEY ? 'configured' : 'NOT CONFIGURED - server will return errors'}`);
+  console.error('[MCP] Using Gemini model: gemini-2.5-pro-preview-05-06');
+  console.error('[MCP] Ready to handle requests');
 }
 
 main().catch((error) => {
